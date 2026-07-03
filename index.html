@@ -1,3 +1,102 @@
+
+/
+Claude finished the response
+index.html is there! 🎉
+
+Now enable GitHub Pages:
+
+Click Settings in the top menu
+Click Pages in the left sidebar
+Click the None dropdown under Branch
+Select main
+Click Save
+🧊⛄
+
+done
+
+Now wait about 60 seconds then go to:
+
+https://csbowring6-source.github.io/Navigator
+Open that on your phone and tell me what you see! 🧊⛄
+
+1783057108944_image.png
+NOW THAT'S A MAP! 🎉🎉🎉
+
+Look at that — Canungra on a proper dark map with roads, street names, and your amber dot sitting right on your location. That is Navigator working properly!
+
+New URL for everyone:
+
+https://csbowring6-source.github.io/Navigator
+Send that to Brian and Amanda.
+
+And from now on, updating is much simpler — just go to GitHub, click index.html, click the edit pencil, paste new content, commit. No more folder renaming or Netlify faff.
+
+How does that feel? 🧊⛄
+
+Well if you can see a map you've gor better eyes than me all I see is a dot
+
+Ha — fair enough! 😄
+
+Looking again at your screenshot — you're right, it's mostly dark with just road outlines barely visible and your dot. The map tiles are loading but very dark.
+
+Let me brighten them up — swap to a lighter dark theme so roads are actually visible.
+
+
+Ran a command, read a file
+Ran a command, read a file
+Download that. Then update GitHub:
+
+Go to github.com/csbowring6-source/Navigator
+Click index.html
+Click the pencil icon to edit
+Select all (Cmd+A) and delete
+Paste the new file contents
+Click Commit changes
+This uses standard OSM tiles with a dark CSS filter — roads will be clearly visible. 🧊⛄
+
+
+Navigator prototype
+Code · HTML 
+Screenshot 2026-07-03 at 07.31.44.png
+That's showing the commit view — the file is already uploaded. Now you need to update it with the new version.
+
+Click Navigator in the breadcrumb at the top to go back to the main repository page. 🧊⛄
+
+breadcrumb ?
+
+Sorry — click the back arrow in your browser to go back one page. 🧊⛄
+
+Screenshot 2026-07-03 at 07.35.44.png
+Here ?
+
+Click Navigator in the top left — it's right next to "csbowring6-source /" in the header. 🧊⛄
+
+Screenshot 2026-07-03 at 07.36.45.png
+here ?
+
+Perfect — I can see github-pages deployed successfully on the right. ✅
+
+Now to update the file:
+
+Click index.html
+Click the pencil icon (edit) top right of the file
+Press Cmd+A to select all
+Delete everything
+Open the downloaded navigator_prototype.html in TextEdit, select all, copy
+Paste into GitHub
+Click Commit changes
+🧊⛄
+
+
+
+This is what
+
+
+
+Claude is AI and can make mistakes. Please double-check responses.
+
+
+Navigator prototype · HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,7 +114,7 @@
   *{box-sizing:border-box;margin:0;padding:0;}
   html,body{height:100%;overflow:hidden;}
   body{background:var(--navy);color:var(--white);font-family:'Inter',sans-serif;display:flex;flex-direction:column;}
-
+ 
   /* HEADER */
   .header{background:var(--navy2);border-bottom:1px solid rgba(245,166,35,0.25);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
   .logo{display:flex;align-items:center;gap:8px;}
@@ -26,7 +125,7 @@
   .status-pill{display:flex;align-items:center;gap:5px;background:rgba(46,204,113,0.12);border:1px solid rgba(46,204,113,0.3);border-radius:20px;padding:3px 9px;font-size:11px;color:var(--green);font-weight:500;}
   .status-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
-
+ 
   /* MAP PICKER */
   .map-picker{position:relative;}
   .map-btn{display:flex;align-items:center;gap:4px;background:var(--navy3);border:1px solid rgba(255,255,255,0.12);border-radius:7px;padding:4px 9px;font-size:11px;color:var(--gray1);cursor:pointer;font-family:'Inter',sans-serif;}
@@ -35,21 +134,21 @@
   .map-option{padding:10px 14px;border-radius:8px;font-size:14px;color:var(--gray1);cursor:pointer;display:flex;align-items:center;gap:8px;}
   .map-option:hover,.map-option:active{background:var(--navy3);}
   .map-option.selected{color:var(--amber);}
-
+ 
   /* VEHICLE SELECTOR */
   .vehicle-bar{background:var(--navy2);border-bottom:1px solid rgba(255,255,255,0.06);padding:8px 14px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
   .vehicle-bar::-webkit-scrollbar{display:none;}
   .v-chip{display:flex;align-items:center;gap:5px;background:var(--navy3);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--gray2);white-space:nowrap;cursor:pointer;flex-shrink:0;transition:all 0.2s;}
   .v-chip:hover{border-color:rgba(245,166,35,0.4);}
   .v-chip.active{border-color:var(--amber);color:var(--amber);background:rgba(245,166,35,0.08);}
-
+ 
   /* MAP */
   .map-wrap{position:relative;flex:0 0 35vh;overflow:hidden;background:var(--navy3);}
   #map{width:100%;height:100%;min-height:200px;}
   .map-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;}
   .map-placeholder-icon{font-size:28px;}
   .map-placeholder-text{font-size:11px;color:var(--gray3);}
-
+ 
   /* ALERT STRIP */
   .alert-strip{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(10,22,40,0.96));padding:6px 10px 8px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;z-index:5;}
   .alert-strip::-webkit-scrollbar{display:none;}
@@ -57,17 +156,17 @@
   .alert-chip.gps{color:var(--gray2);}
   .alert-chip.wind{border-color:rgba(52,152,219,0.4);color:#74b9e8;}
   .alert-chip.fatigue{border-color:rgba(46,204,113,0.3);color:var(--green);}
-
+ 
   /* CONTEXT CHIPS */
   .context-panel{background:var(--navy2);border-bottom:1px solid rgba(255,255,255,0.06);padding:7px 14px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
   .context-panel::-webkit-scrollbar{display:none;}
   .ctx-chip{display:flex;align-items:center;gap:4px;background:var(--navy3);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--gray2);white-space:nowrap;cursor:pointer;flex-shrink:0;transition:all 0.2s;}
   .ctx-chip.active{border-color:var(--amber);color:var(--amber);}
-
+ 
   /* BOTTOM */
   .bottom-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;}
   .chat-area{flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:10px;}
-
+ 
   /* WELCOME */
   .welcome{padding:8px 0;max-width:500px;margin:0 auto;width:100%;}
   .welcome-top{text-align:center;margin-bottom:10px;}
@@ -75,7 +174,7 @@
   .welcome h1{font-size:17px;font-weight:600;margin-bottom:3px;}
   .welcome h1 span{color:var(--amber);}
   .welcome p{font-size:11px;color:var(--gray2);line-height:1.5;}
-
+ 
   /* 2x2 SUGGESTION GRID */
   .suggestion-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
   .suggestion{background:var(--navy2);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 10px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;}
@@ -83,7 +182,7 @@
   .sug-icon{font-size:20px;}
   .sug-label{font-size:12px;font-weight:600;color:var(--amber);}
   .sug-desc{font-size:11px;color:var(--gray2);}
-
+ 
   /* MESSAGES */
   .msg{display:flex;gap:8px;max-width:640px;}
   .msg.user{margin-left:auto;flex-direction:row-reverse;}
@@ -98,7 +197,7 @@
   .fb-btn{background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:4px 9px;font-size:13px;cursor:pointer;opacity:0.6;transition:opacity 0.2s;}
   .fb-btn:hover{opacity:1;border-color:rgba(245,166,35,0.4);}
   .fb-thanks{font-size:11px;color:var(--green);}
-
+ 
   /* MAP CHOICE SHEET */
   .map-sheet{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:flex-end;justify-content:center;padding:16px;}
   .map-sheet.open{display:flex;}
@@ -109,7 +208,7 @@
   .map-sheet-opt{background:var(--navy3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:13px 16px;font-size:14px;color:var(--white);cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;font-family:'Inter',sans-serif;border:none;width:100%;}
   .map-sheet-opt:hover,.map-sheet-opt:active{background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.3);}
   .map-sheet-cancel{margin-top:8px;width:100%;padding:12px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:var(--gray2);font-size:14px;cursor:pointer;font-family:'Inter',sans-serif;}
-
+ 
   /* TYPING */
   .typing{display:flex;gap:8px;align-items:center;}
   .typing-avatar{width:26px;height:26px;border-radius:7px;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--navy);flex-shrink:0;}
@@ -118,7 +217,7 @@
   .dot:nth-child(2){animation-delay:0.2s;}
   .dot:nth-child(3){animation-delay:0.4s;}
   @keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:0.4;}30%{transform:translateY(-4px);opacity:1;}}
-
+ 
   /* INPUT */
   .input-area{background:var(--navy2);border-top:1px solid rgba(255,255,255,0.06);padding:10px 14px;flex-shrink:0;}
   .input-row{display:flex;gap:8px;align-items:center;background:var(--navy3);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:8px 12px;transition:border-color 0.2s;}
@@ -137,10 +236,10 @@
   .voice-status{text-align:center;font-size:11px;margin-top:5px;height:16px;color:var(--gray3);}
   .voice-status.listening-state{color:var(--red);}
   .voice-status.speaking-state{color:var(--amber);}
-
+ 
   .chat-area::-webkit-scrollbar{width:3px;}
   .chat-area::-webkit-scrollbar-thumb{background:var(--navy3);border-radius:2px;}
-
+ 
   /* MAP PREFERENCE MODAL */
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;align-items:center;justify-content:center;padding:20px;}
   .modal-overlay.visible{display:flex;}
@@ -153,7 +252,7 @@
   .modal-opt:hover,.modal-opt:active{border-color:var(--amber);background:rgba(245,166,35,0.08);}
   .modal-opt-icon{font-size:24px;margin-bottom:4px;}
   .modal-opt-label{font-size:12px;color:var(--gray1);font-weight:500;}
-
+ 
   /* TRIP SETUP MODAL */
   .trip-modal{background:var(--navy2);border:1px solid rgba(245,166,35,0.3);border-radius:18px;padding:22px 20px;max-width:420px;width:100%;max-height:88vh;overflow-y:auto;}
   .trip-modal::-webkit-scrollbar{width:3px;}
@@ -193,7 +292,7 @@
   .start-btn-desc{font-size:11px;}
   .start-btn.quick .start-btn-desc{color:var(--gray2);}
   .start-btn.plan .start-btn-desc{color:rgba(10,22,40,0.7);}
-
+ 
   /* PROFILE SETUP (first-time only) */
   .profile-modal{background:var(--navy2);border:1px solid rgba(245,166,35,0.3);border-radius:18px;padding:24px 20px;max-width:380px;width:100%;}
   .profile-vehicle-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;}
@@ -205,7 +304,7 @@
 </style>
 </head>
 <body>
-
+ 
 <!-- PROFILE SETUP — first time only -->
 <div class="start-overlay" id="profileOverlay">
   <div class="profile-modal">
@@ -243,7 +342,7 @@
     </div>
   </div>
 </div>
-
+ 
 <!-- START OVERLAY -->
 <div class="start-overlay hidden" id="startOverlay">
   <div class="start-logo">🧭</div>
@@ -260,7 +359,7 @@
     </div>
   </div>
 </div>
-
+ 
 <!-- TRIP SETUP MODAL -->
 <div class="modal-overlay" id="tripSetupModal">
   <div class="trip-modal">
@@ -269,12 +368,12 @@
       <div class="trip-title">Plan This Trip</div>
       <div class="trip-sub">All optional — fill in what's useful, skip the rest.</div>
     </div>
-
+ 
     <div class="trip-field">
       <span class="trip-label">Destination</span>
       <input class="trip-input" id="tripDestination" placeholder="e.g. Alice Springs via Stuart Highway">
     </div>
-
+ 
     <div class="trip-row">
       <div class="trip-field">
         <span class="trip-label">Departing</span>
@@ -285,17 +384,17 @@
         <input class="trip-input" type="date" id="tripEndDate">
       </div>
     </div>
-
+ 
     <div class="trip-field">
       <span class="trip-label">Fuel range</span>
       <input class="trip-input" id="tripFuelRange" placeholder="e.g. 400km">
     </div>
-
+ 
     <div class="trip-field">
       <span class="trip-label">Conditions</span>
       <input class="trip-input" id="tripConditions" placeholder="e.g. hot, dusty, strong headwind">
     </div>
-
+ 
     <div class="trip-field">
       <span class="trip-label">Passengers</span>
       <div class="trip-chip-row" id="passengerChips">
@@ -306,14 +405,14 @@
         <div class="trip-chip" onclick="toggleTripChip(this)">Elderly</div>
       </div>
     </div>
-
+ 
     <div class="trip-btn-row">
       <button class="trip-btn secondary" onclick="skipTripSetup()">Skip</button>
       <button class="trip-btn primary" onclick="saveTripSetup()">Start Trip</button>
     </div>
   </div>
 </div>
-
+ 
 <!-- HEADER -->
 <div class="header">
   <div class="logo">
@@ -321,7 +420,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 03 Jul 2026, 01:56 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 03 Jul 2026, 03:39 PM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -336,7 +435,7 @@
     <div class="status-pill"><div class="status-dot"></div>Ready</div>
   </div>
 </div>
-
+ 
 <!-- VEHICLE SELECTOR -->
 <div class="vehicle-bar" id="vehicleBar">
   <div class="v-chip active" id="v-car" onclick="selectVehicle('car')">🚗 Car</div>
@@ -344,7 +443,7 @@
   <div class="v-chip" id="v-campervan" onclick="selectVehicle('campervan')">🏕 Campervan</div>
   <div class="v-chip" id="v-truck" onclick="selectVehicle('truck')">🚛 Truck</div>
 </div>
-
+ 
 <!-- MAP -->
 <div class="map-wrap">
   <div id="map">
@@ -359,7 +458,7 @@
     <div class="alert-chip fatigue" id="fatigueChip">🕐 0h 0m</div>
   </div>
 </div>
-
+ 
 <!-- CONTEXT CHIPS -->
 <div class="context-panel">
   <div class="ctx-chip" id="soloChip" onclick="toggleChip(this)">👩 Solo driver</div>
@@ -367,7 +466,7 @@
   <div class="ctx-chip" id="rangeChip" onclick="setRange()">🛣 Range: 400km</div>
   <div class="ctx-chip" id="condChip" onclick="setCond()">🌤 Conditions</div>
 </div>
-
+ 
 <!-- BOTTOM -->
 <div class="bottom-panel">
   <div class="chat-area" id="chatArea">
@@ -382,7 +481,7 @@
       </div>
     </div>
   </div>
-
+ 
   <div class="input-area">
     <div class="wake-bar">
       <button class="wake-word-btn" id="wakeBtn" onclick="toggleWakeWord()">🎙 Hey Navigator</button>
@@ -396,7 +495,7 @@
     <div class="voice-status" id="voiceStatus"></div>
   </div>
 </div>
-
+ 
 <div class="modal-overlay" id="mapPrefModal">
   <div class="modal">
     <div class="modal-icon">🗺</div>
@@ -422,7 +521,7 @@
     </div>
   </div>
 </div>
-
+ 
 <!-- MAP CHOICE SHEET -->
 <div class="map-sheet" id="mapSheet" onclick="closeMapSheet(event)">
   <div class="map-sheet-inner">
@@ -437,12 +536,12 @@
     <button class="map-sheet-cancel" onclick="closeMapSheet()">Cancel</button>
   </div>
 </div>
-
+ 
 <script>
 const ANTHROPIC_KEY = "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";
 const GMAPS_KEY     = "AIzaSyCaH2RSV31clT9JlzfHODlgtmfGdBLmAUI";
 const WEATHER_KEY   = "5e1f7a4226943fdbe8872d2b7423d38b";
-
+ 
 // ── VEHICLE PROFILES ──────────────────────────────────────────────────────────
 // Fuel types available per vehicle
 const FUEL_TYPES = {
@@ -451,9 +550,9 @@ const FUEL_TYPES = {
   campervan:['Unleaded 91','Premium 95','Diesel'],
   truck:    ['Diesel'],
 };
-
+ 
 let selectedFuel = 'Unleaded 91'; // default
-
+ 
 const VEHICLES = {
   car: {
     label: 'Car',
@@ -508,7 +607,7 @@ const VEHICLES = {
     systemNote: 'Vehicle: truck. Requires truck-friendly fuel stops with diesel, adequate clearance, and room to manoeuvre. Always flag low bridges and weight restrictions proactively. Driving hour limits are a legal compliance requirement in Australia — when asked about rest breaks, treat this as mandatory, not optional, and reference fatigue management regulations if drive time suggests it is relevant. Range approximately 400km.',
   },
 };
-
+ 
 let currentVehicle = 'car';
 let gps = null;
 let gpsAddress = null;
@@ -519,34 +618,34 @@ let selectedMap = 'apple';
 let tripContext = '';
 let userName = '';
 let userVehicles = [];
-
+ 
 // ── PROFILE SETUP (first time only — name + owned vehicles) ──────────────────
 function toggleProfileVehicle(el) {
   el.classList.toggle('selected');
 }
-
+ 
 function saveProfile() {
   const name = document.getElementById('profileName').value.trim();
   const selected = Array.from(document.querySelectorAll('.profile-vehicle-opt.selected')).map(el => el.dataset.v);
-
+ 
   userName = name || 'there';
   userVehicles = selected.length ? selected : ['car'];
-
+ 
   try {
     localStorage.setItem('navigator_profile', JSON.stringify({ name: userName, vehicles: userVehicles }));
   } catch(e) {}
-
+ 
   document.getElementById('profileOverlay').classList.add('hidden');
   applyProfile();
   document.getElementById('startOverlay').classList.remove('hidden');
 }
-
+ 
 function applyProfile() {
   // Personalise greetings
   document.getElementById('startTitle').innerHTML = `Welcome back, <span>${userName}</span>`;
   const wh = document.getElementById('welcomeHeading');
   if (wh) wh.innerHTML = `G'day ${userName}.<br>Your <span>co-pilot</span> is ready.`;
-
+ 
   // Filter vehicle bar to only show owned vehicles
   const bar = document.getElementById('vehicleBar');
   const allChips = bar.querySelectorAll('.v-chip');
@@ -559,7 +658,7 @@ function applyProfile() {
     selectVehicle(userVehicles[0]);
   }
 }
-
+ 
 function loadProfile() {
   try {
     const saved = localStorage.getItem('navigator_profile');
@@ -579,7 +678,7 @@ function loadProfile() {
     document.getElementById('profileOverlay').classList.remove('hidden');
   }
 }
-
+ 
 // ── START OVERLAY / TRIP SETUP ────────────────────────────────────────────────
 function quickStart() {
   document.getElementById('startOverlay').classList.add('hidden');
@@ -595,20 +694,20 @@ function quickStart() {
     }
   } catch(e) {}
 }
-
+ 
 function openTripSetup() {
   document.getElementById('startOverlay').classList.add('hidden');
   document.getElementById('tripSetupModal').classList.add('visible');
 }
-
+ 
 function skipTripSetup() {
   document.getElementById('tripSetupModal').classList.remove('visible');
 }
-
+ 
 function toggleTripChip(el) {
   el.classList.toggle('selected');
 }
-
+ 
 function saveTripSetup() {
   const dest = document.getElementById('tripDestination').value.trim();
   const start = document.getElementById('tripStartDate').value;
@@ -616,31 +715,31 @@ function saveTripSetup() {
   const fuel = document.getElementById('tripFuelRange').value.trim();
   const cond = document.getElementById('tripConditions').value.trim();
   const passengers = Array.from(document.querySelectorAll('#passengerChips .trip-chip.selected')).map(c => c.textContent).join(', ');
-
+ 
   const parts = [];
   if (dest) parts.push(`Destination: ${dest}.`);
   if (start || end) parts.push(`Trip dates: ${start || '?'} to ${end || '?'}.`);
   if (fuel) { parts.push(`Fuel range: ${fuel}.`); document.getElementById('rangeChip').textContent = `⛽ Range: ${fuel}`; }
   if (cond) { parts.push(`Conditions: ${cond}.`); document.getElementById('condChip').textContent = `🌤 ${cond}`; }
   if (passengers) parts.push(`Passengers: ${passengers}.`);
-
+ 
   // Auto-activate solo driver chip if Solo selected
   if (passengers.includes('Solo')) document.getElementById('soloChip').classList.add('active');
-
+ 
   tripContext = parts.join(' ');
   document.getElementById('tripSetupModal').classList.remove('visible');
-
+ 
   // Persist for next session's Quick Start
   try {
     localStorage.setItem('navigator_last_trip', tripContext);
     localStorage.setItem('navigator_last_trip_raw', JSON.stringify({ fuel, cond, passengers }));
   } catch(e) {}
-
+ 
   if (tripContext) {
     addMsg('nav', `Trip noted${dest ? ' — heading to ' + dest : ''}. I'll keep all of this in mind. What do you need?`);
   }
 }
-
+ 
 // ── MAP PREFERENCE (remembered per device) ────────────────────────────────────
 function loadMapPreference() {
   try {
@@ -662,7 +761,7 @@ function loadMapPreference() {
     document.getElementById('mapPrefModal').classList.add('visible');
   }
 }
-
+ 
 function setMapPreference(id, icon, label) {
   selectedMap = id;
   document.getElementById('mapIcon').textContent = icon;
@@ -679,7 +778,7 @@ let recognition = null;
 let isListening = false;
 let driveStart = Date.now();
 const synth = window.speechSynthesis;
-
+ 
 // ── VEHICLE SELECTOR ──────────────────────────────────────────────────────────
 function selectVehicle(id) {
   currentVehicle = id;
@@ -702,7 +801,7 @@ function selectVehicle(id) {
   // Update suggestions
   updateSuggestions();
 }
-
+ 
 function updateSuggestions() {
   const v = VEHICLES[currentVehicle];
   const grid = document.getElementById('suggestionGrid');
@@ -715,10 +814,10 @@ function updateSuggestions() {
     </div>
   `).join('');
 }
-
+ 
 // ── GPS ───────────────────────────────────────────────────────────────────────
 let gpsRetries = 0;
-
+ 
 function initGPS() {
   if (!navigator.geolocation) { updateGps('📍 GPS unavailable on this browser'); return; }
   updateGps('📍 Locating...');
@@ -745,7 +844,7 @@ function initGPS() {
     };
     updateGps(messages[err.code] || '📍 Location error — retrying...');
     document.getElementById('mapPlaceholderText').textContent = messages[err.code] || 'Location error';
-
+ 
     // Auto-retry for timeout/unavailable (codes 2 and 3) — these are often transient,
     // especially on laptops using Wi-Fi-based positioning instead of true GPS.
     if (err.code !== 1 && gpsRetries < 4) {
@@ -753,21 +852,21 @@ function initGPS() {
       setTimeout(initGPS, 3000);
     }
   }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
-
+ 
   navigator.geolocation.watchPosition(pos => {
     gps = { lat:pos.coords.latitude, lon:pos.coords.longitude };
     if (window._navMarker) window._navMarker.setPosition({lat:gps.lat,lng:gps.lon});
   }, ()=>{}, { enableHighAccuracy:true, maximumAge:15000 });
 }
-
+ 
 function updateGps(text) { document.getElementById('gpsChip').textContent = text; }
-
+ 
 // ── OPENSTREETMAP (free, no API key, no billing) ─────────────────────────────
 function loadGoogleMaps() {
   // Called after GPS resolves — load OpenStreetMap instead
   loadOSMMap();
 }
-
+ 
 function loadOSMMap() {
   if (!gps) return;
   // Load Leaflet CSS and JS dynamically
@@ -784,20 +883,20 @@ function loadOSMMap() {
   s.onload = initOSMMap;
   document.head.appendChild(s);
 }
-
+ 
 function initOSMMap() {
   if (!gps || !window.L) return;
-
+ 
   const placeholder = document.getElementById('mapPlaceholder');
   if (placeholder) placeholder.style.display = 'none';
-
+ 
   // Set explicit pixel height on map container — required for Leaflet tile rendering
   const mapWrap = document.querySelector('.map-wrap');
   const mapEl   = document.getElementById('map');
   const wrapH   = mapWrap ? mapWrap.offsetHeight : 240;
   mapEl.style.width  = '100%';
   mapEl.style.height = (wrapH > 0 ? wrapH : 240) + 'px';
-
+ 
   const map = L.map('map', {
     zoomControl:       false,
     attributionControl: false,
@@ -805,14 +904,20 @@ function initOSMMap() {
     touchZoom:         true,
     scrollWheelZoom:   false,
   }).setView([gps.lat, gps.lon], 15);
-
+ 
   // CartoDB dark matter — free, no key
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    subdomains: 'abcd',
-    maxZoom:    19,
-    minZoom:    3,
+  // Use a clearer dark style with better road visibility
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    minZoom: 3,
+    opacity: 0.85,
   }).addTo(map);
-
+ 
+  // Dark overlay to match Navigator theme
+  const style = document.createElement('style');
+  style.textContent = '#map { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(1.1); }';
+  document.head.appendChild(style);
+ 
   // Amber dot marker
   const icon = L.divIcon({
     html: '<div style="width:16px;height:16px;background:#F5A623;border:3px solid #0A1628;border-radius:50%;box-shadow:0 0 0 4px rgba(245,166,35,0.25),0 0 10px rgba(245,166,35,0.4);"></div>',
@@ -820,16 +925,16 @@ function initOSMMap() {
     iconSize:   [16, 16],
     iconAnchor: [8, 8],
   });
-
+ 
   window._navMarker = L.marker([gps.lat, gps.lon], { icon }).addTo(map);
   window._navMap    = map;
-
+ 
   // Leaflet needs this after the container becomes visible
   setTimeout(() => {
     map.invalidateSize(true);
     map.setView([gps.lat, gps.lon], 15);
   }, 500);
-
+ 
   // Keep position updated
   navigator.geolocation.watchPosition(pos => {
     gps = { lat: pos.coords.latitude, lon: pos.coords.longitude };
@@ -839,9 +944,9 @@ function initOSMMap() {
     }
   }, () => {}, { enableHighAccuracy: true, maximumAge: 10000 });
 }
-
+ 
 window.initMap = function() {}; // no-op kept for compatibility
-
+ 
 // ── WEATHER ───────────────────────────────────────────────────────────────────
 async function fetchWeather() {
   if (!gps) return;
@@ -855,14 +960,14 @@ async function fetchWeather() {
     weatherCtx = `Wind: ${wspd}km/h from ${wdir}. Temperature: ${temp}°C.`;
   } catch {}
 }
-
+ 
 // ── DRIVE TIMER ───────────────────────────────────────────────────────────────
 setInterval(() => {
   const h = Math.floor((Date.now()-driveStart)/3600000);
   const m = Math.floor(((Date.now()-driveStart)%3600000)/60000);
   document.getElementById('fatigueChip').textContent = `🕐 ${h}h ${m}m`;
 }, 30000);
-
+ 
 // ── MAP PICKER ────────────────────────────────────────────────────────────────
 function toggleMapMenu() { document.getElementById('mapDropdown').classList.toggle('open'); }
 function selectMap(id,icon,label) {
@@ -881,62 +986,62 @@ function getMapUrl(dest) {
   const qRaw    = dest + ' Australia';
   const iOS     = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const android = /Android/i.test(navigator.userAgent);
-
+ 
   const maps = {
     // Apple Maps — best on iOS
     apple: `https://maps.apple.com/?q=${q}`,
-
+ 
     // Google Maps — try app deep link first, fall back to web
     google: iOS
       ? `comgooglemaps://?q=${q}&center=&zoom=14`
       : android
         ? `geo:0,0?q=${q}`
         : `https://www.google.com/maps/search/?api=1&query=${q}`,
-
+ 
     // Waze — correct iOS deep link format
     // waze:// scheme with ll (lat,lon) or search query
     waze: `https://waze.com/ul?q=${q}&navigate=yes`,
-
+ 
     // Maps.me
     'maps.me': `https://maps.me/?q=${q}`,
   };
-
+ 
   return maps[selectedMap] || `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
-
+ 
 // Show map choice sheet — user taps their preferred app
 // This approach works reliably on all mobile browsers including Safari
 let currentNavDest = '';
-
+ 
 function navigateTo(dest) {
   currentNavDest = dest;
   document.getElementById('mapSheetDest').textContent = dest;
   document.getElementById('mapSheet').classList.add('open');
 }
-
+ 
 function closeMapSheet(e) {
   if (!e || e.target === document.getElementById('mapSheet')) {
     document.getElementById('mapSheet').classList.remove('open');
   }
 }
-
+ 
 function openInMap(app) {
   const dest = currentNavDest;
   const q    = encodeURIComponent(dest + ' Australia');
   const iOS  = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
+ 
   const urls = {
     apple:    `https://maps.apple.com/?q=${q}`,
     google:   `https://www.google.com/maps/search/?api=1&query=${q}`,
     waze:     `https://waze.com/ul?q=${q}&navigate=yes`,
     'maps.me':`https://maps.me/?q=${q}`,
   };
-
+ 
   // Use location.href for app deep links on mobile (avoids Safari popup blocker)
   window.location.href = urls[app] || urls.apple;
   closeMapSheet();
 }
-
+ 
 // ── CONTEXT CHIPS ─────────────────────────────────────────────────────────────
 function toggleChip(el) { el.classList.toggle('active'); }
 function setFuelType() {
@@ -951,7 +1056,7 @@ function setFuelType() {
     }
   }
 }
-
+ 
 function setRange() {
   const r = prompt('Fuel range in km:', VEHICLES[currentVehicle].range);
   if (r) document.getElementById('rangeChip').textContent = `🛣 Range: ${r}km`;
@@ -960,10 +1065,10 @@ function setCond() {
   const c = prompt('Conditions (e.g. hot, dusty, wet, strong headwind):', '');
   if (c) document.getElementById('condChip').textContent = `🌤 ${c}`;
 }
-
+ 
 // ── VOICE ─────────────────────────────────────────────────────────────────────
 function toggleVoice() { isListening ? stopListening() : startListening(); }
-
+ 
 function startListening() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     alert('Voice not supported. Try Chrome on Android.'); return;
@@ -1001,7 +1106,7 @@ function startListening() {
   };
   try { recognition.start(); } catch(e) { stopListening(); }
 }
-
+ 
 function stopListening() {
   isListening=false;
   try{if(recognition)recognition.stop();}catch(e){}
@@ -1010,7 +1115,7 @@ function stopListening() {
   document.getElementById('inputRow').classList.remove('listening');
   setVoiceStatus('','');
 }
-
+ 
 function speak(text) {
   if(!synth) return;
   synth.cancel();
@@ -1030,13 +1135,13 @@ function speak(text) {
   };
   synth.speak(utt);
 }
-
+ 
 function setVoiceStatus(state,text){
   const el=document.getElementById('voiceStatus');
   el.className='voice-status'+(state==='listening'?' listening-state':state==='speaking'?' speaking-state':'');
   el.textContent=text;
 }
-
+ 
 // ── UI ────────────────────────────────────────────────────────────────────────
 function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,80)+'px';}
 function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
@@ -1047,7 +1152,7 @@ function parseDest(text){
   for(const p of pp){const m=text.match(p);if(m)return m[1].trim().replace(/\.$/,'');}
   return null;
 }
-
+ 
 function addMsg(role,text){
   document.getElementById('welcome')?.remove();
   const chat=document.getElementById('chatArea');
@@ -1081,7 +1186,7 @@ function addMsg(role,text){
   div.appendChild(av); div.appendChild(bub);
   chat.appendChild(div); chat.scrollTop=chat.scrollHeight;
 }
-
+ 
 function showTyping(){
   const chat=document.getElementById('chatArea');
   const div=document.createElement('div'); div.className='typing'; div.id='typing';
@@ -1089,18 +1194,18 @@ function showTyping(){
   chat.appendChild(div); chat.scrollTop=chat.scrollHeight;
 }
 function hideTyping(){document.getElementById('typing')?.remove();}
-
+ 
 // ── SYSTEM PROMPT ─────────────────────────────────────────────────────────────
 const SYSTEM=`You are Navigator — an AI co-pilot for Australian road travellers.
-
+ 
 RESPONSE FORMAT — always exactly this:
 Sentence 1: Best option. Place name, distance, one key fact relevant to the vehicle.
 Sentence 2: Navigating to [place] now. Say option 2 for an alternative.
-
+ 
 If driver says option 2:
 Sentence 1: Alternative. Place name, distance, one trade-off.
 Sentence 2: Navigating to [place] now.
-
+ 
 RULES:
 - Two sentences maximum. Always. No exceptions.
 - No explanations. No suggestions to check other apps. No fluff.
@@ -1111,12 +1216,12 @@ RULES:
 - Heat plus air con: reduce range 10-15%. State adjusted figure.
 - Fatigue over 4 hours: name a specific rest stop in sentence 1.
 - Warning lights: nearest service and distance in sentence 1. Navigate in sentence 2.
-
+ 
 SOLO DRIVER MODE (when flagged in context):
 - Same two sentence format.
 - Weight safety in stop selection — well-lit, staffed, reviewed.
 - Replace navigation sentence with check-in reminder when stopping for the night.`;
-
+ 
 // ── SEND ──────────────────────────────────────────────────────────────────────
 async function sendMessage(){
   const inp=document.getElementById('userInput');
@@ -1126,13 +1231,13 @@ async function sendMessage(){
   busy=true; document.getElementById('sendBtn').disabled=true;
   synth?.cancel();
   addMsg('user',text);
-
+ 
   const driveHrs=((Date.now()-driveStart)/3600000).toFixed(1);
   const isSolo=document.getElementById('soloChip').classList.contains('active');
   const rangeText=document.getElementById('rangeChip').textContent.replace('⛽ ','');
   const condText=document.getElementById('condChip').textContent.replace('🌤 ','');
   const v=VEHICLES[currentVehicle];
-
+ 
   const ctx=[
     gpsAddress?`Current location: ${gpsAddress} (${gps?.lat?.toFixed(5)}, ${gps?.lon?.toFixed(5)})`:'Location: Australia',
     weatherCtx,
@@ -1143,10 +1248,10 @@ async function sendMessage(){
     isSolo?'SOLO DRIVER MODE ACTIVE.':'',
     tripContext?`Trip plan: ${tripContext}`:'',
   ].filter(Boolean).join(' ');
-
+ 
   messages.push({role:'user',content:`[Context: ${ctx}]\n\n${text}`});
   showTyping();
-
+ 
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
@@ -1165,7 +1270,7 @@ async function sendMessage(){
   }
   busy=false; document.getElementById('sendBtn').disabled=false;
 }
-
+ 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 if(synth) synth.onvoiceschanged=()=>synth.getVoices();
 initGPS();
@@ -1176,3 +1281,8 @@ setInterval(fetchWeather,600000);
 </script>
 </body>
 </html>
+ 
+
+
+
+Failed to download files
