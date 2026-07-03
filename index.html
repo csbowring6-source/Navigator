@@ -316,7 +316,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 03 Jul 2026, 10:30 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 03 Jul 2026, 11:15 PM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -919,8 +919,8 @@ function openInMap(app) {
   const iOS  = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   const urls = {
-    apple:    `https://maps.apple.com/?q=${q}`,
-    google:   `https://www.google.com/maps/search/?api=1&query=${q}`,
+    apple:    `https://maps.apple.com/?daddr=${q}&dirflg=d`,
+    google:   `https://www.google.com/maps/dir/?api=1&destination=${q}&travelmode=driving`,
     waze:     `https://waze.com/ul?q=${q}&navigate=yes`,
     'maps.me':`https://maps.me/?q=${q}`,
   };
@@ -957,51 +957,59 @@ function setCond() {
 // ── VOICE ─────────────────────────────────────────────────────────────────────
 function toggleVoice() { isListening ? stopListening() : startListening(); }
 
+let silenceTimer = null;
+let capturedFinal = '';
+
 function startListening() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     alert('Voice not supported. Try Chrome on Android.'); return;
   }
   synth?.cancel();
+  capturedFinal = '';
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SR();
-  recognition.lang='en-AU'; recognition.continuous=false; recognition.interimResults=true;
+  recognition.lang='en-AU'; recognition.continuous=true; recognition.interimResults=true;
   recognition.onstart = () => {
     isListening=true;
     document.getElementById('voiceBtn').classList.add('listening');
     document.getElementById('inputRow').classList.add('listening');
-    setVoiceStatus('listening','🔴 Listening...');
+    setVoiceStatus('listening','🔴 Listening... pause when done');
   };
   recognition.onresult = e => {
-    let final='',interim='';
+    let interim='';
     for(let i=e.resultIndex;i<e.results.length;i++){
-      if(e.results[i].isFinal) final+=e.results[i][0].transcript;
+      if(e.results[i].isFinal) capturedFinal+=e.results[i][0].transcript+' ';
       else interim+=e.results[i][0].transcript;
     }
-    document.getElementById('userInput').value=final||interim;
-    if(final&&final.trim().length>1){ stopListening(); sendMessage(); }
+    document.getElementById('userInput').value=(capturedFinal+interim).trim();
+    // Only send after a genuine pause — don't cut the driver off mid-sentence
+    clearTimeout(silenceTimer);
+    silenceTimer=setTimeout(()=>{ try{if(recognition)recognition.stop();}catch(err){} },1600);
   };
   recognition.onerror = e => {
-    stopListening();
-    if(e.error==='not-allowed') alert('Microphone blocked. Please allow access in browser settings.');
+    if(e.error==='not-allowed'){ resetVoiceUI(); alert('Microphone blocked. Please allow access in browser settings.'); }
   };
   recognition.onend = () => {
-    if(isListening) stopListening();
-    // Auto-reset mic button quickly so it's ready for next tap
-    document.getElementById('voiceBtn').classList.remove('listening');
-    document.getElementById('inputRow').classList.remove('listening');
-    isListening = false;
-    setVoiceStatus('','');
+    clearTimeout(silenceTimer);
+    resetVoiceUI();
+    // Always send whatever was captured — prevents the mic ending with an unsent command
+    const pending=document.getElementById('userInput').value.trim();
+    if(pending.length>1 && !busy) sendMessage();
   };
-  try { recognition.start(); } catch(e) { stopListening(); }
+  try { recognition.start(); } catch(e) { resetVoiceUI(); }
 }
 
-function stopListening() {
+function resetVoiceUI() {
   isListening=false;
-  try{if(recognition)recognition.stop();}catch(e){}
   recognition=null;
   document.getElementById('voiceBtn').classList.remove('listening');
   document.getElementById('inputRow').classList.remove('listening');
   setVoiceStatus('','');
+}
+
+function stopListening() {
+  // Manual tap while listening — stop the mic; onend sends what was captured
+  try{if(recognition)recognition.stop();}catch(e){}
 }
 
 function speak(text) {
