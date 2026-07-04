@@ -316,7 +316,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 04 Jul 2026, 01:15 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 04 Jul 2026, 01:35 AM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -916,11 +916,12 @@ function closeMapSheet(e) {
 function openInMap(app) {
   const dest = currentNavDest;
   const q    = encodeURIComponent(dest + ' Australia');
-  const iOS  = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const android = /Android/i.test(navigator.userAgent);
 
   const urls = {
     apple:    `https://maps.apple.com/?daddr=${q}&dirflg=d`,
-    google:   `https://www.google.com/maps/dir/?api=1&destination=${q}&travelmode=driving`,
+    // Android: google.navigation intent launches straight into turn-by-turn — no Start button
+    google:   android ? `google.navigation:q=${q}` : `https://www.google.com/maps/dir/?api=1&destination=${q}&travelmode=driving`,
     waze:     `https://waze.com/ul?q=${q}&navigate=yes`,
     'maps.me':`https://maps.me/?q=${q}`,
   };
