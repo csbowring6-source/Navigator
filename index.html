@@ -129,6 +129,11 @@
   .voice-btn.listening{background:var(--red);border-color:var(--red);color:var(--white);}
   .send-btn{width:36px;height:36px;border-radius:9px;background:var(--amber);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--navy);font-size:15px;flex-shrink:0;}
   .send-btn:disabled{background:var(--gray3);cursor:not-allowed;}
+  .wake-bar{margin-bottom:8px;}
+  .wake-word-btn{width:100%;padding:9px;border-radius:10px;background:var(--navy3);border:1px solid rgba(255,255,255,0.1);color:var(--gray2);font-family:"Inter",sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s;text-align:center;}
+  .wake-word-btn:hover{border-color:rgba(245,166,35,0.4);color:var(--gray1);}
+  .wake-word-btn.active{background:rgba(245,166,35,0.12);border-color:var(--amber);color:var(--amber);animation:wakePulse 2s infinite;}
+  @keyframes wakePulse{0%,100%{border-color:var(--amber);}50%{border-color:rgba(245,166,35,0.3);}}
   .voice-status{text-align:center;font-size:11px;margin-top:5px;height:16px;color:var(--gray3);}
   .voice-status.listening-state{color:var(--red);}
   .voice-status.speaking-state{color:var(--amber);}
@@ -324,7 +329,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 04 Jul 2026, 09:50 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 04 Jul 2026, 10:40 PM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -387,6 +392,9 @@
   </div>
 
   <div class="input-area">
+    <div class="wake-bar">
+      <button class="wake-word-btn" id="wakeBtn" onclick="toggleWakeWord()">🎙 Hands-free: Off</button>
+    </div>
     <div class="input-row" id="inputRow">
       <textarea id="userInput" placeholder="Or type here..." rows="1"
         onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
@@ -986,6 +994,59 @@ function applyConditions() {
   document.getElementById('condSheet').classList.remove('open');
 }
 
+// ── HANDS-FREE WAKE WORD — "Hey Copilot" / "Hey Navigator" ───────────────────
+// Opt-in. Works while Navigator is open with the screen on (dash mount use).
+let wakeEnabled = false;
+let wakeRec = null;
+
+function toggleWakeWord() {
+  wakeEnabled = !wakeEnabled;
+  const b = document.getElementById('wakeBtn');
+  if (wakeEnabled) {
+    b.textContent = '🎙 Hands-free: On — say "Hey Copilot"';
+    b.classList.add('active');
+    unlockAudio();
+    startWakeListening();
+  } else {
+    b.textContent = '🎙 Hands-free: Off';
+    b.classList.remove('active');
+    stopWakeListening();
+    setVoiceStatus('','');
+  }
+}
+
+function startWakeListening() {
+  if (!wakeEnabled || isListening || busy) return;
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Voice not supported on this browser.'); wakeEnabled=false; return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  try {
+    wakeRec = new SR();
+    wakeRec.lang='en-AU'; wakeRec.continuous=true; wakeRec.interimResults=true;
+    wakeRec.onresult = e => {
+      let t='';
+      for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript+' ';
+      if (/\bhey,?\s*(co[- ]?pilot|navigator)\b/i.test(t)) {
+        stopWakeListening();
+        setTimeout(startListening, 400);
+      }
+    };
+    wakeRec.onend = () => {
+      // Browsers end continuous sessions regularly — quietly restart while enabled
+      if (wakeEnabled && !isListening && !busy) setTimeout(startWakeListening, 400);
+    };
+    wakeRec.onerror = () => {};
+    wakeRec.start();
+    setVoiceStatus('','👂 Listening for "Hey Copilot"');
+  } catch(e) {}
+}
+
+function stopWakeListening() {
+  try { if (wakeRec) { wakeRec.onend = null; wakeRec.stop(); } } catch(e) {}
+  wakeRec = null;
+}
+
 // ── VOICE ─────────────────────────────────────────────────────────────────────
 // iOS blocks speech synthesis unless first triggered by a direct user tap.
 // Fire a silent utterance on the first gesture to unlock the speaker.
@@ -1009,6 +1070,7 @@ function startListening() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     alert('Voice not supported. Try Chrome on Android.'); return;
   }
+  stopWakeListening(); // never two microphones at once
   synth?.cancel();
   capturedFinal = '';
   const isAndroid = /Android/i.test(navigator.userAgent);
@@ -1253,6 +1315,8 @@ async function sendMessage(){
     addMsg('nav','Connection issue — check your internet and try again.');
   }
   busy=false; document.getElementById('sendBtn').disabled=false;
+  // Hands-free mode: go back to listening for the wake word after the reply
+  if (wakeEnabled && !isListening) setTimeout(startWakeListening, 1200);
 }
 
 // ── VERSION CHECK ─────────────────────────────────────────────────────────────
