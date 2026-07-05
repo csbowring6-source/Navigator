@@ -36,13 +36,6 @@
   .map-option:hover,.map-option:active{background:var(--navy3);}
   .map-option.selected{color:var(--amber);}
 
-  /* VEHICLE SELECTOR */
-  .vehicle-bar{background:var(--navy2);border-bottom:1px solid rgba(255,255,255,0.06);padding:8px 14px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
-  .vehicle-bar::-webkit-scrollbar{display:none;}
-  .v-chip{display:flex;align-items:center;gap:5px;background:var(--navy3);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--gray2);white-space:nowrap;cursor:pointer;flex-shrink:0;transition:all 0.2s;}
-  .v-chip:hover{border-color:rgba(245,166,35,0.4);}
-  .v-chip.active{border-color:var(--amber);color:var(--amber);background:rgba(245,166,35,0.08);}
-
   /* MAP */
   .map-wrap{position:relative;flex:0 0 35vh;overflow:hidden;background:var(--navy3);}
   #map{width:100%;height:100%;min-height:200px;}
@@ -328,7 +321,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 04 Jul 2026, 10:55 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 04 Jul 2026, 11:15 PM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -342,14 +335,6 @@
     </div>
     <div class="status-pill"><div class="status-dot"></div>Ready</div>
   </div>
-</div>
-
-<!-- VEHICLE SELECTOR -->
-<div class="vehicle-bar" id="vehicleBar">
-  <div class="v-chip active" id="v-car" onclick="selectVehicle('car')">🚗 Car</div>
-  <div class="v-chip" id="v-caravan" onclick="selectVehicle('caravan')">🚐 Caravan</div>
-  <div class="v-chip" id="v-campervan" onclick="selectVehicle('campervan')">🏕 Campervan</div>
-  <div class="v-chip" id="v-truck" onclick="selectVehicle('truck')">🚛 Truck</div>
 </div>
 
 <!-- MAP -->
@@ -369,6 +354,7 @@
 
 <!-- CONTEXT CHIPS -->
 <div class="context-panel">
+  <div class="ctx-chip active" id="vehicleChip" onclick="openVehicleSheet()">🚗 Car</div>
   <div class="ctx-chip" id="soloChip" onclick="toggleChip(this)">🧍 Solo</div>
   <div class="ctx-chip" id="fuelTypeChip" onclick="setFuelType()">⛽ Unleaded 91</div>
   <div class="ctx-chip" id="rangeChip" onclick="setRange()">🛣 Range</div>
@@ -382,7 +368,7 @@
       <div class="welcome-top">
         <div class="welcome-icon">🧭</div>
         <h1 id="welcomeHeading">G'day.<br>Your <span>co-pilot</span> is ready.</h1>
-        <p>Select your vehicle above — then tap mic or a suggestion.</p>
+        <p>Tap your vehicle below the map to change it — then tap the mic or a suggestion.</p>
       </div>
       <div class="suggestion-grid" id="suggestionGrid">
         <!-- Populated by JS based on vehicle -->
@@ -442,6 +428,20 @@
       <button class="map-sheet-opt" onclick="openInMap('maps.me')">🧭 Maps.me</button>
     </div>
     <button class="map-sheet-cancel" onclick="closeMapSheet()">Cancel</button>
+  </div>
+</div>
+
+<!-- VEHICLE SHEET -->
+<div class="map-sheet" id="vehicleSheet" onclick="closeVehicleSheet(event)">
+  <div class="map-sheet-inner">
+    <div class="map-sheet-title">What are you driving?</div>
+    <div class="map-sheet-options">
+      <button class="map-sheet-opt" onclick="chooseVehicle('car')">🚗 Car</button>
+      <button class="map-sheet-opt" onclick="chooseVehicle('caravan')">🚐 Caravan</button>
+      <button class="map-sheet-opt" onclick="chooseVehicle('campervan')">🏕 Campervan</button>
+      <button class="map-sheet-opt" onclick="chooseVehicle('truck')">🚛 Truck</button>
+    </div>
+    <button class="map-sheet-cancel" onclick="closeVehicleSheet()">Cancel</button>
   </div>
 </div>
 
@@ -573,14 +573,7 @@ function applyProfile() {
   const wh = document.getElementById('welcomeHeading');
   if (wh) wh.innerHTML = `G'day ${userName}.<br>Your <span>co-pilot</span> is ready.`;
 
-  // Filter vehicle bar to only show owned vehicles
-  const bar = document.getElementById('vehicleBar');
-  const allChips = bar.querySelectorAll('.v-chip');
-  allChips.forEach(chip => {
-    const id = chip.id.replace('v-','');
-    chip.style.display = userVehicles.includes(id) ? 'flex' : 'none';
-  });
-  // Select the first owned vehicle as default
+  // First owned vehicle becomes the starting default — all vehicles stay selectable
   if (userVehicles.length) {
     selectVehicle(userVehicles[0]);
   }
@@ -706,10 +699,21 @@ let driveStart = Date.now();
 const synth = window.speechSynthesis;
 
 // ── VEHICLE SELECTOR ──────────────────────────────────────────────────────────
+function openVehicleSheet() { document.getElementById('vehicleSheet').classList.add('open'); }
+function closeVehicleSheet(e) {
+  if (!e || e.target === document.getElementById('vehicleSheet')) {
+    document.getElementById('vehicleSheet').classList.remove('open');
+  }
+}
+function chooseVehicle(id) {
+  selectVehicle(id);
+  document.getElementById('vehicleSheet').classList.remove('open');
+}
+
 function selectVehicle(id) {
   currentVehicle = id;
-  document.querySelectorAll('.v-chip').forEach(c => c.classList.remove('active'));
-  document.getElementById('v-'+id).classList.add('active');
+  const v = VEHICLES[id];
+  document.getElementById('vehicleChip').textContent = `${v.icon} ${v.label}`;
   // Range chip stays as the user set it — vehicle switch doesn't stamp a number
   // Update fuel type to first available for this vehicle
   const fuels = FUEL_TYPES[id] || FUEL_TYPES.car;
