@@ -332,7 +332,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 05 Jul 2026, 12:30 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 05 Jul 2026, 01:05 AM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -584,6 +584,7 @@ let messages = [];
 let busy = false;
 let selectedMap = 'apple';
 let tripContext = '';
+let currentRunDest = '';
 let userName = '';
 let userVehicles = [];
 
@@ -709,6 +710,7 @@ function saveTripSetup() {
 
   // Remember this journey as a regular run (destination is the key)
   if (dest) {
+    currentRunDest = dest;
     try {
       let runs = JSON.parse(localStorage.getItem('navigator_saved_trips') || '[]');
       runs = runs.filter(r => r.dest.toLowerCase() !== dest.toLowerCase());
@@ -719,6 +721,17 @@ function saveTripSetup() {
 }
 
 // ── REGULAR RUNS — one-tap recall of saved journeys ───────────────────────────
+function saveStopForRun(place) {
+  if (!currentRunDest) return;
+  try {
+    const runs = JSON.parse(localStorage.getItem('navigator_saved_trips') || '[]');
+    const r = runs.find(x => x.dest === currentRunDest);
+    if (!r) return;
+    r.stops = [...new Set([...(r.stops || []), place])].slice(-6);
+    localStorage.setItem('navigator_saved_trips', JSON.stringify(runs));
+  } catch(e) {}
+}
+
 function renderSavedTrips() {
   try {
     const runs = JSON.parse(localStorage.getItem('navigator_saved_trips') || '[]');
@@ -742,7 +755,9 @@ function recallTrip(i) {
     if (!r) return;
     const parts = [`Destination: ${r.dest}.`];
     if (r.passengers) parts.push(`Passengers: ${r.passengers}.`);
+    if (r.stops && r.stops.length) parts.push(`Driver's favourite stops on this run: ${r.stops.join(', ')}.`);
     tripContext = parts.join(' ');
+    currentRunDest = r.dest;
     if (r.vehicle && VEHICLES[r.vehicle]) selectVehicle(r.vehicle);
     if (r.passengers && r.passengers.includes('Solo')) document.getElementById('soloChip').classList.add('active');
     document.getElementById('startOverlay').classList.add('hidden');
@@ -1284,6 +1299,13 @@ function addMsg(role,text){
       btn.textContent='📍 Navigate to '+dest+' — '+mapNames[selectedMap];
       btn.onclick=()=>navigateTo(dest);
       bub.appendChild(btn);
+      // Star: remember this stop for the active run
+      if (currentRunDest) {
+        const star=document.createElement('button'); star.className='fb-btn'; star.style.marginTop='6px';
+        star.textContent='⭐ Save stop for this run';
+        star.onclick=()=>{ saveStopForRun(dest); star.textContent='✓ Saved for '+currentRunDest; star.disabled=true; };
+        bub.appendChild(star);
+      }
     }
     // Feedback row — quick trust loop
     const fbRow=document.createElement('div'); fbRow.className='feedback-row';
@@ -1330,6 +1352,8 @@ RULES:
 - BANNED: apologies, hedging, "I'd suggest", "you might want to", "it's worth noting", restating the question, describing what you can't do.
 - No explanations. No suggestions to check other apps. No fluff.
 - FUEL PRICES: If LIVE FUEL PRICES appear in context, they are real and current — quote the actual cents-per-litre price and station name from that list, preferring the cheapest the vehicle can access. If no live prices are in context, never state or invent a price and never refer the driver to another app — name the best nearby station for the vehicle, and if asked for cheapest, pick the station most likely cheap (independents and roadhouse chains over motorway servos) and add "price unconfirmed" — two words, nothing more.
+- CAMPS/PARKS: If NEARBY CAMPS/PARKS data appears in context, prefer naming real sites from it, blended with your own knowledge of well-known parks — the data is real but may be incomplete. Solo mode filters still apply.
+- FAVOURITE STOPS: If the trip plan lists the driver's favourite stops on this run, lead with those for overnight suggestions.
 - TRIP FUEL STRATEGY: When the trip plan includes a destination, prefer fuel stops broadly along the route to it, not sideways diversions. If the destination is a capital city, recommend filling the tank full at the last cheaper regional stop before the metro area and say why in three words or fewer (e.g. "Sydney runs dearer").
 - Plain sentences only. No markdown.
 - Use GPS location to name real nearby places.
@@ -1364,6 +1388,30 @@ async function fetchFuelPrices() {
   return '';
 }
 
+// ── NEARBY CAMPS & CARAVAN PARKS (via Worker /camps route — OpenStreetMap) ───
+function distKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function fetchCamps() {
+  if (!gps) return '';
+  try {
+    const r = await fetch(`${API_URL}camps?lat=${gps.lat}&lon=${gps.lon}&radius=40`);
+    const d = await r.json();
+    if (d.results && d.results.length) {
+      const list = d.results.slice(0,6).map(s => {
+        const km = (s.lat && s.lon) ? `${distKm(gps.lat, gps.lon, s.lat, s.lon).toFixed(0)}km` : '';
+        const bits = [s.type, km, s.fee==='no'?'free':'', s.powered&&s.powered!=='no'?'powered':'', s.dump==='yes'?'dump point':''].filter(Boolean).join(', ');
+        return `${s.name} (${bits})`;
+      }).join('; ');
+      return `NEARBY CAMPS/PARKS (OpenStreetMap, real sites but data may be incomplete): ${list}.`;
+    }
+  } catch(e) {}
+  return '';
+}
+
 // ── SEND ──────────────────────────────────────────────────────────────────────
 async function sendMessage(){
   unlockAudio();
@@ -1380,6 +1428,11 @@ async function sendMessage(){
   if (/fuel|petrol|diesel|servo|cheapest|unleaded|e10|\b9[158]\b/i.test(text)) {
     fuelCtx = await fetchFuelPrices();
   }
+  // Stay-related question? Grab real nearby camps and parks
+  let campsCtx = '';
+  if (/camp|caravan park|stay|tonight|overnight|powered site|dump point|free camp/i.test(text)) {
+    campsCtx = await fetchCamps();
+  }
 
   const driveHrs=((Date.now()-driveStart)/3600000).toFixed(1);
   const isSolo=document.getElementById('soloChip').classList.contains('active');
@@ -1391,6 +1444,7 @@ async function sendMessage(){
     gpsAddress?`Current location: ${gpsAddress} (${gps?.lat?.toFixed(5)}, ${gps?.lon?.toFixed(5)})`:'Location: Australia',
     weatherCtx,
     fuelCtx,
+    campsCtx,
     v.systemNote,
     `Fuel type: ${selectedFuel}.${rangeText!=='Range'?' Driver-set fuel range: '+rangeText.replace('Range: ','')+'.':''}`,
     `Drive time: ${driveHrs} hours.`,
