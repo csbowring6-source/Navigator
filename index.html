@@ -332,7 +332,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 06 Jul 2026, 09:10 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 06 Jul 2026, 09:45 AM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -1351,7 +1351,7 @@ RULES:
 - Every word must carry information: a name, a number, a fact, or the navigation line. Nothing else.
 - BANNED: apologies, hedging, "I'd suggest", "you might want to", "it's worth noting", restating the question, describing what you can't do.
 - No explanations. No suggestions to check other apps. No fluff.
-- NEAREST vs CHEAPEST: These are different questions. "Nearest servo" = answer with the closest suitable station to the driver's GPS using all your knowledge, even if it has no live price — never send a driver far away for a nearest question. "Cheapest" = use the live list and state the distance; if the cheapest confirmed station is more than about 25km away you MUST also name the closest local option with "price unconfirmed" — the driver chooses, not you.
+- NEAREST vs CHEAPEST: Two different questions with two different data sources. NEARBY FUEL STATIONS in context is the ground truth for proximity — for any "nearest/closest" question answer with its first entry, never your own guess and never a price-list station. LIVE FUEL PRICES is the ground truth for price — for "cheapest" questions use it and state the distance; if the cheapest confirmed station is more than about 25km away you MUST also name the nearest station from NEARBY FUEL STATIONS with "price unconfirmed" — the driver chooses, not you.
 - FUEL PRICES: If LIVE FUEL PRICES appear in context, they are real and current — but the list is sorted by price, includes distances, and covers only price-reporting states, so nearby stations can be missing from it. Quote actual cents-per-litre when you use it. If no live prices are in context, never state or invent a price and never refer the driver to another app — name the best nearby station for the vehicle, and if asked for cheapest, pick the station most likely cheap (independents and roadhouse chains over motorway servos) and add "price unconfirmed" — two words, nothing more.
 - CAMPS/PARKS: If NEARBY CAMPS/PARKS data appears in context, prefer naming real sites from it, blended with your own knowledge of well-known parks — the data is real but may be incomplete. Solo mode filters still apply.
 - FAVOURITE STOPS: If the trip plan lists the driver's favourite stops on this run, lead with those for overnight suggestions.
@@ -1416,6 +1416,24 @@ async function fetchCamps() {
   return '';
 }
 
+// ── NEARBY FUEL STATIONS — proximity ground truth (OSM, all brands, no prices) ─
+async function fetchStations() {
+  if (!gps) return '';
+  try {
+    const r = await fetch(`${API_URL}stations?lat=${gps.lat}&lon=${gps.lon}&radius=30`);
+    const d = await r.json();
+    if (d.results && d.results.length) {
+      const withKm = d.results
+        .map(s => ({...s, km: distKm(gps.lat, gps.lon, s.lat, s.lon)}))
+        .sort((a,b) => a.km - b.km)
+        .slice(0,5);
+      const list = withKm.map(s => `${s.name}${s.brand && s.brand !== s.name ? ' ('+s.brand+')' : ''} ${s.km.toFixed(0)}km`).join('; ');
+      return `NEARBY FUEL STATIONS (OpenStreetMap ground truth, sorted NEAREST first, no prices): ${list}.`;
+    }
+  } catch(e) {}
+  return '';
+}
+
 // ── SEND ──────────────────────────────────────────────────────────────────────
 async function sendMessage(){
   unlockAudio();
@@ -1427,15 +1445,16 @@ async function sendMessage(){
   synth?.cancel();
   addMsg('user',text);
 
-  // Fuel-related question? Grab live prices before asking the AI —
-  // EXCEPT pure proximity questions ("nearest servo"): the live list only
-  // covers reporting states, so near a border it anchors the AI on far-away
-  // stations. Nearest questions run on the AI's local knowledge instead.
+  // Fuel questions get TWO ground truths: NEARBY FUEL STATIONS (proximity,
+  // every state) always; LIVE FUEL PRICES only when price is the intent —
+  // near a border the price list anchors the AI on far-away stations.
   let fuelCtx = '';
+  let stationsCtx = '';
   const fuelQuery = /fuel|petrol|diesel|servo|cheapest|unleaded|e10|\b9[158]\b/i.test(text);
   const nearestOnly = /nearest|closest/i.test(text) && !/cheap|price|cost|cents/i.test(text);
-  if (fuelQuery && !nearestOnly) {
-    fuelCtx = await fetchFuelPrices();
+  if (fuelQuery) {
+    stationsCtx = await fetchStations();
+    if (!nearestOnly) fuelCtx = await fetchFuelPrices();
   }
   // Stay-related question? Grab real nearby camps and parks
   let campsCtx = '';
@@ -1452,6 +1471,7 @@ async function sendMessage(){
   const ctx=[
     gpsAddress?`Current location: ${gpsAddress} (${gps?.lat?.toFixed(5)}, ${gps?.lon?.toFixed(5)})`:'Location: Australia',
     weatherCtx,
+    stationsCtx,
     fuelCtx,
     campsCtx,
     v.systemNote,
