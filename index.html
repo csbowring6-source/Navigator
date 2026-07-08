@@ -358,7 +358,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 08 Jul 2026, 06:30 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 08 Jul 2026, 02:15 PM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -1685,15 +1685,10 @@ function addMsg(role,text){
     const fbRow=document.createElement('div'); fbRow.className='feedback-row';
     const thumbUp=document.createElement('button'); thumbUp.className='fb-btn'; thumbUp.textContent='👍'; thumbUp.title='Yes — lock it in';
     // Is this a fuel-price reply with a shortlist to dial through?
+    // fuelShortlist is already frozen in cheapest-then-nearest order — just read it.
     const isFuelDial = fuelShortlist.length > 1 && /\$\d|c\/L|litre/i.test(cleaned);
-    // One stable sequence: cheapest first, then the rest strictly nearest-first
-    let dialSeq = [];
-    if (isFuelDial) {
-      const cheapest = fuelShortlist[0];
-      const rest = fuelShortlist.slice(1).sort((a,b)=>a.km-b.km);
-      dialSeq = [cheapest, ...rest];
-    }
-    const atNearest = fuelDialIdx >= dialSeq.length - 1;
+    const myDialIdx = fuelDialIdx;               // this reply's position in the dial
+    const atNearest = myDialIdx >= fuelShortlist.length - 1;
     const thumbDown=document.createElement('button'); thumbDown.className='fb-btn';
     if (isFuelDial) {
       thumbDown.textContent = atNearest ? '✓ that\'s the nearest' : '👎 nearer option';
@@ -1721,11 +1716,12 @@ function addMsg(role,text){
     };
     thumbDown.onclick=()=>{
       if (isFuelDial && !atNearest) {
-        // Step to the next servo in the stable cheapest→nearest sequence
-        fuelDialIdx++;
-        const s = dialSeq[fuelDialIdx];
+        // Advance from THIS reply's position — never a stale global index
+        const nextIdx = myDialIdx + 1;
+        fuelDialIdx = nextIdx;
+        const s = fuelShortlist[nextIdx];
         const dollars = '$' + (s.price/100).toFixed(2);
-        const last = fuelDialIdx >= dialSeq.length - 1;
+        const last = nextIdx >= fuelShortlist.length - 1;
         const dialMsg = `${s.name}, ${s.km.toFixed(0)}km, ${dollars} a litre${last ? ' — that\'s your nearest.' : '. Navigating there now.'}`;
         addMsg('nav', dialMsg);
         speak(dialMsg);
@@ -1815,10 +1811,14 @@ async function fetchFuelPrices() {
     const d = await r.json();
     if (d.results && d.results.length) {
       notePlaces(d.results.slice(0,5).map(s => s.name));
-      // Shortlist for the 👎 dial: cheapest is result[0]; the rest ranked by distance
-      fuelShortlist = d.results
+      // Build the 👎 dial sequence ONCE, frozen: cheapest first, then the rest
+      // in true nearest-first order. The render only reads this — never rebuilds it.
+      const withKm = d.results
         .filter(s => s.lat && s.lon)
         .map(s => ({ name: s.name, price: s.price, km: distKm(gps.lat, gps.lon, parseFloat(s.lat), parseFloat(s.lon)) }));
+      const cheapest = withKm[0];
+      const rest = withKm.slice(1).sort((a,b) => a.km - b.km);
+      fuelShortlist = cheapest ? [cheapest, ...rest] : [];
       fuelDialIdx = 0;
       const list = d.results.slice(0,5).map(s => {
         const km = (s.lat && s.lon) ? `, ${distKm(gps.lat, gps.lon, parseFloat(s.lat), parseFloat(s.lon)).toFixed(0)}km away` : '';
