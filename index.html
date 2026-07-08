@@ -256,7 +256,10 @@
       <div class="start-btn-title" id="resumeTitle">▶ Resume trip</div>
       <div class="start-btn-desc">Pick up where you left off</div>
     </div>
-    <button class="map-sheet-cancel" id="clearTripBtn" style="display:none;margin-top:-6px;font-size:12px;" onclick="clearTrip()">✕ Clear trip — done with this one</button>
+    <div class="start-btn quick" id="clearTripBtn" style="display:none;border-color:rgba(231,76,60,0.5);" onclick="clearTrip()">
+      <div class="start-btn-title" id="clearTitle" style="color:var(--red);">✕ Clear trip</div>
+      <div class="start-btn-desc">Wrap it up — regular runs and stars are kept</div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="start-btn quick" style="border-color:rgba(245,166,35,0.5);" onclick="showWhere()">
         <div class="start-btn-title">🗺 Where are you going?</div>
@@ -355,7 +358,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 08 Jul 2026, 01:20 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 08 Jul 2026, 01:35 AM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -938,6 +941,7 @@ function renderResumeTrip() {
       document.getElementById('resumeBtn').style.display = 'block';
       document.getElementById('clearTripBtn').style.display = 'block';
       document.getElementById('resumeTitle').textContent = '▶ Resume trip: ' + raw.dest;
+      document.getElementById('clearTitle').textContent = '✕ Clear trip: ' + raw.dest;
     }
   } catch(e) {}
 }
