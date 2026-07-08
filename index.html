@@ -358,7 +358,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 08 Jul 2026, 04:05 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 08 Jul 2026, 04:25 AM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -1661,6 +1661,7 @@ function addMsg(role,text){
     const thumbUp=document.createElement('button'); thumbUp.className='fb-btn'; thumbUp.textContent='👍'; thumbUp.title='Yes — lock it in';
     const thumbDown=document.createElement('button'); thumbDown.className='fb-btn'; thumbDown.textContent='👎'; thumbDown.title='No — give me another option';
     const isPlan = /Day 1:/i.test(cleaned);
+    const isQuestion = /\?\s*$/.test(cleaned);
     thumbUp.onclick=()=>{
       if (!currentRunDest && pendingTripDest) {
         const d = pendingTripDest;
@@ -1670,6 +1671,9 @@ function addMsg(role,text){
         try { localStorage.setItem('navigator_trip_plan', cleaned); } catch(e) {}
         tripContext += ' Agreed plan: ' + cleaned;
         fbRow.innerHTML='<span class="fb-thanks">✓ Plan locked in — I\'ll remember it for this trip.</span>';
+      } else if (isQuestion) {
+        fbRow.innerHTML='<span class="fb-thanks">✓ Yes</span>';
+        if (!busy) { document.getElementById('userInput').value = 'Yes'; sendMessage(); }
       } else {
         fbRow.innerHTML='<span class="fb-thanks">Thanks — noted ✓</span>';
       }
