@@ -358,7 +358,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 08 Jul 2026, 03:15 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 08 Jul 2026, 04:05 AM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -1717,6 +1717,7 @@ RULES:
 - CLARITY CHECK: If the request is rambling, ambiguous, or could mean two different things, do NOT guess — reply with ONE short confirmation of what you understood, 12 words maximum, ending in a question (e.g. "Powered site tonight, van-accessible, near Gympie — right?"). When the driver confirms, answer in the standard format. If the request is clear, NEVER add a confirmation step — answer immediately. Most requests are clear.
 - Every word must carry information: a name, a number, a fact, or the navigation line. Nothing else.
 - BANNED: apologies, hedging, "I'd suggest", "you might want to", "it's worth noting", restating the question, describing what you can't do.
+- NEVER mention your context, lists, data sources, tools, or how you know things — speak as though you simply know. Never tell the driver to use another app, website, or service under ANY circumstances, including when you lack data: if nothing is mapped nearby, say "none mapped within [X]km — nearest likely in [town]" and stop.
 - No explanations. No suggestions to check other apps. No fluff.
 - NEARBY LISTS ARE GROUND TRUTH: Any NEARBY list in context (fuel stations, gyms, cafes, chemists, supermarkets, etc.) is real OpenStreetMap data sorted nearest first. For any nearest/closest request, answer with the first suitable entry from the relevant list — NEVER estimate proximity from your own memory; your geographic recall of small towns is unreliable. If the driver asks for several ("the 3 nearest gyms"), list up to three from the list with distances in one sentence — that is allowed and expected. Never invent policies such as "one result per reply"; no such rule exists. If a list says none found, say so and name the nearest sizeable town.
 - MULTI-ERRAND: If the driver names two errands ("gym then coffee"), name the nearest suitable place for each from their lists in sentence 1, and navigate to the first errand in sentence 2.
@@ -1917,17 +1918,17 @@ async function fetchAccom() {
 
 // ── EVERYDAY PLACES — gyms, cafes, chemists... proximity ground truth (OSM) ──
 const POI_TRIGGERS = [
-  { re: /\bgym\b|fitness/i, kind: 'gym', label: 'GYMS' },
-  { re: /coffee|\bcafe\b|caf\u00e9/i, kind: 'cafe', label: 'CAFES' },
-  { re: /supermarket|groceries|woolworths|coles|\biga\b/i, kind: 'supermarket', label: 'SUPERMARKETS' },
-  { re: /chemist|pharmac/i, kind: 'pharmacy', label: 'CHEMISTS' },
-  { re: /\bpub\b|\bbeer\b|\bbar\b/i, kind: 'pub', label: 'PUBS' },
-  { re: /bakery|\bpie\b/i, kind: 'bakery', label: 'BAKERIES' },
-  { re: /doctor|hospital|medical|clinic/i, kind: 'medical', label: 'MEDICAL' },
+  { re: /\bgyms?\b|fitness/i, kind: 'gym', label: 'GYMS' },
+  { re: /coffee|\bcafes?\b|caf\u00e9s?/i, kind: 'cafe', label: 'CAFES' },
+  { re: /supermarkets?|groceries|woolworths|coles|\biga\b/i, kind: 'supermarket', label: 'SUPERMARKETS' },
+  { re: /chemists?|pharmac/i, kind: 'pharmacy', label: 'CHEMISTS' },
+  { re: /\bpubs?\b|\bbeers?\b|\bbars?\b/i, kind: 'pub', label: 'PUBS' },
+  { re: /bakery|bakeries|\bpies?\b/i, kind: 'bakery', label: 'BAKERIES' },
+  { re: /doctors?|hospitals?|medical|clinics?/i, kind: 'medical', label: 'MEDICAL' },
   { re: /laundr|washing machine/i, kind: 'laundry', label: 'LAUNDRIES' },
-  { re: /toilet|\bloo\b|restroom/i, kind: 'toilets', label: 'PUBLIC TOILETS' },
-  { re: /\batm\b|\bbank\b|cash out/i, kind: 'atm', label: 'ATMS & BANKS' },
-  { re: /mechanic|tyre|car repair|service the car/i, kind: 'mechanic', label: 'MECHANICS' },
+  { re: /toilets?|\bloos?\b|restrooms?/i, kind: 'toilets', label: 'PUBLIC TOILETS' },
+  { re: /\batms?\b|\bbanks?\b|cash out/i, kind: 'atm', label: 'ATMS & BANKS' },
+  { re: /mechanics?|tyres?|car repair|service the car/i, kind: 'mechanic', label: 'MECHANICS' },
 ];
 
 async function fetchPoi(kind, label) {
@@ -2037,7 +2038,7 @@ async function sendMessage(){
   }
 
   const ctx=[
-    gpsAddress?`Current location: ${gpsAddress} (${gps?.lat?.toFixed(5)}, ${gps?.lon?.toFixed(5)})`:'Location: Australia',
+    gpsAddress?`Current location: ${gpsAddress} (${gps?.lat?.toFixed(5)}, ${gps?.lon?.toFixed(5)})`:'NO LOCATION FIX — do not name or guess specific nearby places; ask the driver to tap the 📍 pin to set their location first.',
     userRego?`Vehicle rego: ${userRego}.`:'',
     userVan?`Driver's van: ${userVan}.`:'',
     weatherCtx,
