@@ -22,6 +22,25 @@
   .logo-icon{width:28px;height:28px;background:var(--amber);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;}
   .logo-text{font-size:16px;font-weight:600;letter-spacing:-0.3px;}
   .header-right{display:flex;align-items:center;gap:8px;}
+  .sos-btn{background:#E7202A;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:0.3px;box-shadow:0 0 0 2px rgba(231,32,42,0.25);transition:transform 0.1s;}
+  .sos-btn:hover,.sos-btn:active{transform:scale(1.05);background:#c81820;}
+  .sos-overlay{position:fixed;inset:0;background:rgba(4,10,20,0.92);z-index:2000;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;}
+  .sos-overlay.open{display:flex;}
+  .sos-panel{background:var(--navy2);border:2px solid #E7202A;border-radius:16px;max-width:460px;width:100%;padding:20px;margin-top:30px;}
+  .sos-title{font-size:20px;font-weight:800;color:#fff;text-align:center;margin-bottom:4px;}
+  .sos-sub{font-size:12px;color:var(--gray2);text-align:center;margin-bottom:18px;line-height:1.4;}
+  .sos-block{background:var(--navy3);border-radius:12px;padding:14px;margin-bottom:12px;}
+  .sos-block-label{font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;}
+  .sos-here{font-size:17px;font-weight:700;color:#fff;line-height:1.35;}
+  .sos-coords{font-size:14px;color:var(--gray1);font-family:monospace;margin-top:4px;}
+  .sos-help-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);}
+  .sos-help-row:last-child{border-bottom:none;}
+  .sos-help-name{font-size:14px;color:#fff;}
+  .sos-help-dist{font-size:12px;color:var(--gray2);}
+  .sos-btn-big{display:block;width:100%;background:#E7202A;color:#fff;border:none;border-radius:12px;padding:16px;font-size:18px;font-weight:800;cursor:pointer;margin-bottom:10px;text-align:center;text-decoration:none;}
+  .sos-btn-copy{background:var(--amber);color:var(--navy1);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;margin-top:8px;}
+  .sos-nav{background:var(--navy2);border:1px solid var(--amber);color:var(--amber);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .sos-close{display:block;width:100%;background:none;border:none;color:var(--gray2);font-size:14px;padding:10px;cursor:pointer;margin-top:4px;}
   .build-stamp{font-size:9px;color:var(--gray3);white-space:nowrap;letter-spacing:0.01em;}
   .status-pill{display:flex;align-items:center;gap:5px;background:rgba(46,204,113,0.12);border:1px solid rgba(46,204,113,0.3);border-radius:20px;padding:3px 9px;font-size:11px;color:var(--green);font-weight:500;}
   .status-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
@@ -70,7 +89,7 @@
   .welcome p{font-size:11px;color:var(--gray2);line-height:1.5;}
 
   /* QUICK SUGGESTION ROW */
-  .suggestion-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px;}
+  .suggestion-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
   .suggestion{background:var(--navy2);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 4px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:5px;}
   .suggestion:hover,.suggestion:active{border-color:var(--amber);background:rgba(245,166,35,0.06);}
   .sug-icon{font-size:26px;line-height:1;}
@@ -359,7 +378,8 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 08 Jul 2026, 05:30 PM AEST</div>
+    <button class="sos-btn" onclick="openSOS()" title="Emergency help">🆘 SOS</button>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v 08 Jul 2026, 06:15 PM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -372,6 +392,30 @@
       </div>
     </div>
     <div class="status-pill"><div class="status-dot"></div>Ready</div>
+  </div>
+</div>
+
+<!-- SOS EMERGENCY PANEL -->
+<div class="sos-overlay" id="sosOverlay" onclick="closeSOS(event)">
+  <div class="sos-panel">
+    <div class="sos-title">🆘 Emergency</div>
+    <div class="sos-sub">In any emergency, call <b>000</b>. Navigator helps you tell them exactly where you are.</div>
+
+    <a class="sos-btn-big" href="tel:000">📞 Call 000</a>
+
+    <div class="sos-block">
+      <div class="sos-block-label">You are here — read this to 000</div>
+      <div class="sos-here" id="sosHere">Finding your location...</div>
+      <div class="sos-coords" id="sosCoords"></div>
+      <button class="sos-btn-copy" id="sosCopyBtn" onclick="copyLocation()" style="display:none;">📋 Copy location</button>
+    </div>
+
+    <div class="sos-block">
+      <div class="sos-block-label">Nearest help</div>
+      <div id="sosHelp"><div class="sos-help-dist">Searching...</div></div>
+    </div>
+
+    <button class="sos-close" onclick="closeSOS()">Close</button>
   </div>
 </div>
 
@@ -610,10 +654,8 @@ const VEHICLES = {
     range: 50,
     rangeLabel: '50km',
     suggestions: [
-      { icon:'⛽', label:'Servo',    desc:'check options',           query:'Cheapest fuel within 20km' },
-      { icon:'☕', label:'Coffee stop',       desc:'near me',             query:'Find me a coffee stop near me' },
-      { icon:'🛣', label:'Tolls + traffic',   desc:'on this route',       query:'Are there any tolls or traffic I should know about on this route?' },
-      { icon:'🗺', label:'Next 20km',         desc:"what's ahead",        query:'What do I need to know about the next 20km?' },
+      { icon:'⛽', label:'Servo',  desc:'check options', query:'Cheapest fuel within 20km' },
+      { icon:'☕', label:'Coffee', desc:'break / stretch', query:'Find me a coffee or a good spot to stop and stretch my legs near me' },
     ],
     systemNote: 'Vehicle: standard car, no towing. Fuel range approximately 50km before next stop needed. Normal parking, any fuel station. Toll roads and traffic congestion are relevant — wind impact is not significant for a car and should not be raised unless conditions are genuinely severe.',
   },
@@ -623,10 +665,8 @@ const VEHICLES = {
     range: 300,
     rangeLabel: '300km',
     suggestions: [
-      { icon:'⛽', label:'Servo',    desc:'check options',          query:'Cheapest fuel in the next 300km I can get into with the van' },
-      { icon:'🏕', label:'Stay tonight',     desc:'powered + dump point', query:'Find somewhere to stay tonight — powered site and dump point for the van' },
-      { icon:'🌬', label:'Wind impact',      desc:'on my range',         query:'How is the wind affecting my range today?' },
-      { icon:'🗺', label:'Next 200km',       desc:"what's ahead",        query:'What do I need to know about the next 200km?' },
+      { icon:'⛽', label:'Servo',  desc:'check options', query:'Cheapest fuel in the next 300km I can get into with the van' },
+      { icon:'☕', label:'Coffee', desc:'break / stretch', query:'Find me a coffee or a good spot to stop and stretch my legs near me' },
     ],
     systemNote: 'Vehicle: car towing a caravan. All stops must have caravan-accessible forecourts — wide entry, drive-through, no boom gates, room to manoeuvre. Flag any access issues explicitly. Wind significantly affects towing stability and fuel range — always relevant.',
   },
@@ -636,10 +676,8 @@ const VEHICLES = {
     range: 200,
     rangeLabel: '200km',
     suggestions: [
-      { icon:'⛽', label:'Servo',    desc:'check options',          query:'Cheapest fuel in the next 200km for a campervan' },
-      { icon:'🏕', label:'Free camp',        desc:'tonight nearby',      query:'Find somewhere to free camp tonight — self-contained campervan' },
-      { icon:'🌬', label:'Wind impact',      desc:'on my range',         query:'How is the wind affecting my range today?' },
-      { icon:'🗺', label:'Next 150km',       desc:"what's ahead",        query:'What do I need to know about the next 150km?' },
+      { icon:'⛽', label:'Servo',  desc:'check options', query:'Cheapest fuel in the next 200km for a campervan' },
+      { icon:'☕', label:'Coffee', desc:'break / stretch', query:'Find me a coffee or a good spot to stop and stretch my legs near me' },
     ],
     systemNote: 'Vehicle: self-contained campervan. Prioritise free and low-cost camping spots over paid caravan parks where self-contained facilities allow it — this is a key differentiator from caravan mode. Height clearance may be relevant. Range approximately 200km between fuel stops.',
   },
@@ -649,10 +687,8 @@ const VEHICLES = {
     range: 400,
     rangeLabel: '400km',
     suggestions: [
-      { icon:'⛽', label:'Servo',    desc:'check options',    query:'Cheapest diesel in the next 400km suitable for a truck' },
-      { icon:'🛑', label:'Rest break',       desc:'compliance + facilities', query:'I need a compliant rest break — find me a truck stop with facilities' },
-      { icon:'🌉', label:'Low bridges',      desc:'+ weight limits',     query:'Are there any low bridges or weight restrictions on this route?' },
-      { icon:'🗺', label:'Next 300km',       desc:"what's ahead",        query:'What do I need to know about the next 300km for a truck?' },
+      { icon:'⛽', label:'Servo',  desc:'check options', query:'Cheapest diesel in the next 400km suitable for a truck' },
+      { icon:'☕', label:'Coffee', desc:'break / stretch', query:'Find me a coffee or a good spot to stop and stretch my legs near me' },
     ],
     systemNote: 'Vehicle: truck. Requires truck-friendly fuel stops with diesel, adequate clearance, and room to manoeuvre. Always flag low bridges and weight restrictions proactively. Driving hour limits are a legal compliance requirement in Australia — when asked about rest breaks, treat this as mandatory, not optional, and reference fatigue management regulations if drive time suggests it is relevant. Range approximately 400km.',
   },
@@ -2150,6 +2186,74 @@ function keepCtx(k, v) { if (v) ctxKeep[k] = { v, t: Date.now() }; }
 function getCtx(k) {
   const e = ctxKeep[k];
   return (e && Date.now() - e.t < 15 * 60 * 1000) ? e.v : '';
+}
+
+// ── SOS / EMERGENCY ───────────────────────────────────────────────────────────
+let sosLocationText = '';
+
+async function openSOS() {
+  document.getElementById('sosOverlay').classList.add('open');
+  const here = document.getElementById('sosHere');
+  const coordsEl = document.getElementById('sosCoords');
+  const copyBtn = document.getElementById('sosCopyBtn');
+  const helpEl = document.getElementById('sosHelp');
+
+  if (!gps) {
+    here.textContent = 'Location not set — tap the 📍 pin on the map, or tell 000 the last town you passed.';
+    coordsEl.textContent = '';
+    copyBtn.style.display = 'none';
+    helpEl.innerHTML = '<div class="sos-help-dist">Set your location to find nearest help.</div>';
+    return;
+  }
+
+  // Coordinates are instant and reliable — show them first, always
+  const lat = gps.lat.toFixed(5), lon = gps.lon.toFixed(5);
+  coordsEl.textContent = `${lat}, ${lon}`;
+  here.textContent = gpsAddress ? gpsAddress.replace(' (manual)','') : 'Locating nearest address...';
+  copyBtn.style.display = 'inline-block';
+
+  // Try to enrich with a precise address (best-effort; coords already shown)
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${gps.lat}&lon=${gps.lon}&format=json&zoom=18`,{headers:{'Accept-Language':'en'}});
+    const d = await r.json();
+    if (d.display_name) here.textContent = d.display_name;
+  } catch(e) {}
+  sosLocationText = `My location: ${here.textContent}. Coordinates: ${lat}, ${lon}.`;
+
+  // Nearest hospital and police — best-effort, never blocks the location readout
+  helpEl.innerHTML = '<div class="sos-help-dist">Searching for nearest hospital and police...</div>';
+  try {
+    const q = `[out:json][timeout:12];(node["amenity"~"hospital|police"](around:60000,${gps.lat},${gps.lon});way["amenity"~"hospital|police"](around:60000,${gps.lat},${gps.lon}););out center tags 30;`;
+    const r = await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:'data='+encodeURIComponent(q) });
+    const d = await r.json();
+    const places = (d.elements||[]).map(e=>{
+      const t=e.tags||{}; const plat=e.lat||(e.center&&e.center.lat); const plon=e.lon||(e.center&&e.center.lon);
+      if(!plat||!plon||!t.amenity) return null;
+      return { name:t.name||(t.amenity==='hospital'?'Hospital':'Police'), type:t.amenity, km:distKm(gps.lat,gps.lon,plat,plon) };
+    }).filter(Boolean);
+    const hosp = places.filter(p=>p.type==='hospital').sort((a,b)=>a.km-b.km)[0];
+    const pol  = places.filter(p=>p.type==='police').sort((a,b)=>a.km-b.km)[0];
+    let html='';
+    const row=(label,p)=> p ? `<div class="sos-help-row"><div><div class="sos-help-name">${label}: ${p.name}</div><div class="sos-help-dist">${p.km.toFixed(0)}km away</div></div><button class="sos-nav" onclick="navigateTo('${p.name.replace(/'/g,"")}')">Navigate</button></div>` : `<div class="sos-help-row"><div class="sos-help-name">${label}: none within 60km</div></div>`;
+    html += row('🏥 Hospital', hosp);
+    html += row('🚓 Police', pol);
+    helpEl.innerHTML = html;
+  } catch(e) {
+    helpEl.innerHTML = '<div class="sos-help-dist">Couldn\'t search right now — call 000 and read them your location above.</div>';
+  }
+}
+
+function closeSOS(e) {
+  if (!e || e.target === document.getElementById('sosOverlay')) {
+    document.getElementById('sosOverlay').classList.remove('open');
+  }
+}
+
+function copyLocation() {
+  if (!sosLocationText) return;
+  navigator.clipboard.writeText(sosLocationText)
+    .then(()=>{ const b=document.getElementById('sosCopyBtn'); b.textContent='✓ Copied'; setTimeout(()=>b.textContent='📋 Copy location',2000); })
+    .catch(()=>alert(sosLocationText));
 }
 
 // ── SEND ──────────────────────────────────────────────────────────────────────
