@@ -382,7 +382,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 08 Jul 2026<br>07:15 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 08 Jul 2026<br>07:30 PM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel" class="map-label-text">Apple Maps</span> ▾
@@ -2408,13 +2408,14 @@ async function checkVersion(){
   try{
     const res = await fetch(window.location.pathname + '?nocache=' + Date.now(), {cache:'no-store'});
     const html = await res.text();
-    const m = html.match(/id="buildStamp"[^>]*>([^<]+)</);
+    // Grab the stamp's inner HTML (may contain <br>), then normalise to plain text
+    const m = html.match(/id="buildStamp"[^>]*>([\s\S]*?)<\/div>/);
     if(!m) return;
-    const liveStamp = m[1].trim();
+    const norm = s => s.replace(/<br\s*\/?>/gi,' ').replace(/<[^>]+>/g,'').replace(/✓/g,'').replace(/\s+/g,' ').trim();
+    const liveStamp = norm(m[1]);
     const el = document.getElementById('buildStamp');
-    const myStamp = el.textContent.replace('✓ ','').trim();
+    const myStamp = norm(el.innerHTML);
     if(liveStamp === myStamp){
-      el.textContent = '✓ ' + myStamp;
       el.style.color = '#2ECC71';
     } else {
       showUpdateBanner();
@@ -2428,7 +2429,12 @@ function showUpdateBanner(){
   b.id = 'updateBanner';
   b.textContent = '⬆ New version available — tap to update';
   b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:3000;background:#F5A623;color:#0A1628;text-align:center;padding:10px;font-size:13px;font-weight:600;cursor:pointer;';
-  b.onclick = () => { window.location.href = window.location.pathname + '?v=' + Date.now(); };
+  b.onclick = () => {
+    b.textContent = '⬆ Updating...';
+    // Force a fresh copy past any cache, then hard-reload
+    fetch(window.location.pathname + '?bust=' + Date.now(), {cache:'reload'})
+      .finally(() => { window.location.replace(window.location.pathname + '?v=' + Date.now()); });
+  };
   document.body.appendChild(b);
 }
 
