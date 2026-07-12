@@ -382,7 +382,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 08 Jul 2026<br>09:45 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 11 Jul 2026<br>08:30 AM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel" class="map-label-text">Apple Maps</span> ▾
@@ -1826,6 +1826,7 @@ RULES:
 - MULTI-ERRAND: If the driver names two errands ("gym then coffee"), name the nearest suitable place for each from their lists in sentence 1, and navigate to the first errand in sentence 2.
 - NEAREST vs CHEAPEST: Two different questions with two different data sources. NEARBY FUEL STATIONS in context is the ground truth for proximity — for any "nearest/closest" question answer with its first entry, never your own guess and never a price-list station. LIVE FUEL PRICES is the ground truth for price — for "cheapest" questions use it and state the distance; if the cheapest confirmed station is more than about 25km away you MUST also name the nearest station from NEARBY FUEL STATIONS with "price unconfirmed" — the driver chooses, not you.
 - FUEL AHEAD ON ROUTE: If CHEAPEST FUEL AHEAD ON ROUTE appears in context, the driver is on a journey — give the cheapest servo ahead on their route, its price in dollars per litre, how far ahead, and the detour off the highway. Frame a worthwhile saving as a good little side-trip; if the cheapest is a big detour, say so and offer the nearest-ahead as the no-fuss alternative.
+- SERVO UNDERFOOT: If the context notes the driver is right now AT a servo that doesn't report a price, lead with that — "you're at one now, price unconfirmed" — then give the cheapest confirmed as the alternative with its distance. Never silently route them past a servo they're standing in.
 - FUEL PRICES: If LOCAL FUEL or LIVE FUEL PRICES appear in context, they are real and current — the first is the cheapest, distances are true ROAD distances, and only price-reporting states are covered so nearby stations can be missing. Lead with the cheapest — name it, its price in dollars per litre the way people say it ("$1.79 a litre", converting 179.9 = $1.79), and its road distance. If a listed station is notably closer for a similar price, add it as a quick alternative in the second sentence. Never invent a price; if none are in context, name the best likely-cheap nearby station (independents and roadhouse chains over motorway servos) and add "price unconfirmed" — two words.
 - CAMPS/PARKS: If NEARBY CAMPS/PARKS data appears in context, prefer naming real sites from it, blended with your own knowledge of well-known parks — the data is real but may be incomplete. Solo mode filters still apply.
 - ACCOMMODATION: If NEARBY ACCOMMODATION data appears in context, match the tier to the request — "treat ourselves"/luxury = highest stars or best-known quality property; "cheap"/backpackers = hostels and budget motels; otherwise the best-fit nearest. Never state a price or vacancy — you don't have them. Blend with your own knowledge of well-known properties. Solo mode filters still apply.
@@ -1896,6 +1897,38 @@ function progressAlongRoute(lat, lon, path) {
   return bestI / (path.length - 1);
 }
 
+// A price older than this is a rumour, not a price — don't send people chasing it.
+const PRICE_MAX_AGE_HOURS = 72;
+
+function freshPrices(results) {
+  const now = Date.now();
+  const fresh = results.filter(s => {
+    if (!s.updated) return false;
+    const t = Date.parse(s.updated);
+    if (isNaN(t)) return false;
+    return (now - t) / 3600000 <= PRICE_MAX_AGE_HOURS;
+  });
+  // If staleness would leave us with nothing, fall back to all — better than silence,
+  // and the AI is told to flag the age.
+  return fresh.length ? fresh : results;
+}
+
+// Are we practically standing at a servo? (any servo, priced or not)
+async function servoUnderfoot() {
+  if (!gps) return null;
+  try {
+    const sr = await fetch(`${API_URL}stations?lat=${gps.lat}&lon=${gps.lon}&radius=5`);
+    const sd = await sr.json();
+    if (sd.results && sd.results.length) {
+      const n = sd.results
+        .map(s => ({ name: s.name, km: distKm(gps.lat, gps.lon, s.lat, s.lon) }))
+        .sort((a,b) => a.km - b.km)[0];
+      if (n && n.km <= 1.5) return n;   // within 1.5km = you're basically there
+    }
+  } catch(e) {}
+  return null;
+}
+
 async function fetchFuelPrices() {
   if (!gps) return '';
   try {
@@ -1908,9 +1941,10 @@ async function fetchFuelPrices() {
       const r = await fetch(`${API_URL}fuel?lat=${gps.lat}&lon=${gps.lon}&type=${code}&radius=100`);
       const d = await r.json();
       if (!d.results || !d.results.length) return '';
+      const usable = freshPrices(d.results);   // stale prices are rumours, not prices
       const path = window._tripRoute.path;
       const myProg = progressAlongRoute(gps.lat, gps.lon, path);
-      const ahead = d.results
+      const ahead = usable
         .filter(s => s.lat && s.lon)
         .map(s => {
           const lat = parseFloat(s.lat), lon = parseFloat(s.lon);
@@ -1961,7 +1995,14 @@ async function fetchFuelPrices() {
       fuelShortlist = ahead.map(s => ({ name: s.name, price: s.price, km: s.km }));
       fuelDialIdx = 0;
       const list = ahead.map(s => `${s.name} (${s.address}): ${s.price} c/L, ${s.km.toFixed(0)}km ahead, ${s.detour.toFixed(0)}km off route`).join('; ');
-      return `CHEAPEST FUEL AHEAD ON ROUTE to ${currentRunDest} — cheapest first, distances by road: ${list}. Mention the detour off the highway; frame a worthwhile saving as a quick side-trip.`;
+
+      // Are we sitting at a servo right now? Say so — don't send them past it.
+      const underfoot = await servoUnderfoot();
+      const underfootNote = underfoot
+        ? ` NOTE: the driver is right now at ${underfoot.name} (${(underfoot.km*1000).toFixed(0)}m away) which does NOT report a price. Say they're at one now, price unconfirmed, and give the cheapest confirmed as the alternative — let them choose.`
+        : '';
+
+      return `CHEAPEST FUEL AHEAD ON ROUTE to ${currentRunDest} — cheapest first, distances by road: ${list}.${underfootNote} Mention the detour off the highway; frame a worthwhile saving as a quick side-trip.`;
     }
 
     // NOT on a journey — cheapest LOCALLY (the errand case), with the dial.
@@ -1969,8 +2010,9 @@ async function fetchFuelPrices() {
     const r = await fetch(`${API_URL}fuel?lat=${gps.lat}&lon=${gps.lon}&type=${code}&radius=20`);
     const d = await r.json();
     if (d.results && d.results.length) {
-      notePlaces(d.results.slice(0,6).map(s => s.name));
-      const cands = d.results.filter(s => s.lat && s.lon).slice(0, 12)
+      const usable = freshPrices(d.results);   // stale prices are rumours, not prices
+      notePlaces(usable.slice(0,6).map(s => s.name));
+      const cands = usable.filter(s => s.lat && s.lon).slice(0, 12)
         .map(s => ({ name: s.name, address: s.address, price: s.price, lat: parseFloat(s.lat), lon: parseFloat(s.lon) }));
       const roads = await roadDistances(gps.lat, gps.lon, cands);
       cands.forEach((c, i) => { c.km = (roads[i] != null) ? roads[i] : distKm(gps.lat, gps.lon, c.lat, c.lon); });
@@ -1985,11 +2027,14 @@ async function fetchFuelPrices() {
       for (const s of nearest) { if (picks.length >= 3) break; if (!picks.includes(s)) picks.push(s); }
       const list = picks.map(s => `${s.name} (${s.address}): ${s.price} c/L, ${s.km.toFixed(0)}km by road`).join('; ');
 
-      // COUNTRY CASE: if the nearest PRICED servo is a real drive away (>12km),
-      // check for any closer servo at all (price or not) via the OSM station list.
+      // A closer servo may exist that simply doesn't report a price — always check,
+      // and shout about it if the driver is practically standing at one.
       let closerNote = '';
       const nearestPricedKm = nearest.length ? nearest[0].km : 999;
-      if (nearestPricedKm > 12) {
+      const underfoot = await servoUnderfoot();
+      if (underfoot) {
+        closerNote = ` NOTE: the driver is right now at ${underfoot.name} (${(underfoot.km*1000).toFixed(0)}m away), which does NOT report a price. Say they're at one now, price unconfirmed, and offer the cheapest confirmed as the alternative — let them choose.`;
+      } else {
         try {
           const sr = await fetch(`${API_URL}stations?lat=${gps.lat}&lon=${gps.lon}&radius=20`);
           const sd = await sr.json();
