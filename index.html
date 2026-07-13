@@ -288,7 +288,7 @@
 <!-- START OVERLAY -->
 <div class="start-overlay hidden" id="startOverlay">
   <div class="start-logo">🧭</div>
-  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 11 Jul 2026, 04:20 PM AEST</div>
+  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 11 Jul 2026, 05:40 PM AEST</div>
   <div class="start-title" id="startTitle">Welcome to <span>Navigator</span></div>
   <div class="start-sub">Your AI co-pilot for the road. Tell me where you're heading — I'll size up the journey.</div>
   <div class="start-btns">
@@ -1183,7 +1183,7 @@ function showOptionPins(places) {
   if (!window._navMap || !window.L || !places || !places.length) return;
   clearOptionPins();
   const pts = [];
-  places.slice(0, 4).forEach((p, i) => {
+  places.slice(0, 6).forEach((p, i) => {
     if (!p.lat || !p.lon) return;
     const isTop = i === 0;
     const noPrice = (p.price == null);
@@ -1198,7 +1198,7 @@ function showOptionPins(places) {
     });
     const m = L.marker([p.lat, p.lon], { icon, interactive: true, keyboard: false, riseOnHover: true }).addTo(window._navMap);
     const priceTxt = p.price ? `$${(p.price/100).toFixed(2)} a litre` : 'price unconfirmed';
-    const kmTxt = (p.km != null) ? (p.km < 1 ? `${Math.round(p.km*1000)} metres away` : `${p.km.toFixed(0)}km away`) : '';
+    const kmTxt = (p.km != null) ? ((p.km < 1 ? `${Math.round(p.km*1000)}m` : `${p.km.toFixed(0)}km`) + (p.mins ? ` \u00b7 ${p.mins} min` : '')) : '';
     const popupHtml = `<div style="font-family:system-ui,sans-serif;min-width:130px;">
         <b>${i+1}. ${p.name}</b><br>
         <span style="color:#B8860B;font-weight:700;">${priceTxt}</span><br>
@@ -1903,7 +1903,7 @@ function addMsg(role,text){
         const s = fuelShortlist[nextIdx];
         const dollars = '$' + (s.price/100).toFixed(2);
         const last = nextIdx >= fuelShortlist.length - 1;
-        const dialMsg = `${s.name}, ${s.km.toFixed(0)}km by road, ${dollars} a litre${last ? ' — that\'s your nearest.' : '.'}`;
+        const dialMsg = `${s.name}, ${s.mins ? s.mins + ' minutes' : s.km.toFixed(0) + ' kilometres'}, ${dollars} a litre${last ? ' — that\'s your nearest.' : '.'}`;
         addMsg('nav', dialMsg);
         lastSpoken = dialMsg;
         speak(dialMsg);
@@ -1956,6 +1956,7 @@ RULES:
 - MULTI-ERRAND: If the driver names two errands ("gym then coffee"), name the nearest suitable place for each from their lists in sentence 1, and navigate to the first errand in sentence 2.
 - NEAREST vs CHEAPEST: Two different questions with two different data sources. NEARBY FUEL STATIONS in context is the ground truth for proximity — for any "nearest/closest" question answer with its first entry, never your own guess and never a price-list station. LIVE FUEL PRICES is the ground truth for price — for "cheapest" questions use it and state the distance; if the cheapest confirmed station is more than about 25km away you MUST also name the nearest station from NEARBY FUEL STATIONS with "price unconfirmed" — the driver chooses, not you.
 - FUEL AHEAD ON ROUTE: If CHEAPEST FUEL AHEAD ON ROUTE appears in context, the driver is on a journey — give the cheapest servo ahead on their route, its price in dollars per litre, how far ahead, and the detour off the highway. Frame a worthwhile saving as a good little side-trip; if the cheapest is a big detour, say so and offer the nearest-ahead as the no-fuss alternative.
+- DISTANCE AND TIME: Context gives both road distance and driving time. Lead with whichever a driver would find more useful: for anything nearby (under about 20 minutes) TIME is what matters — "Liberty Beaudesert, 17 minutes, $1.54 a litre". For longer hauls give both — "Gympie, 180 km, about two hours". Never give both for a short hop; it's a mouthful spoken aloud. Round times naturally: "about 20 minutes", "just under an hour", "a bit over two hours".
 - SPOKEN ALOUD: Your reply is read aloud by a voice. Write distances as words the voice can say properly — "300 metres" not "300m", "20 kilometres" or "20 km" not "20km" jammed together. Same for prices: "$1.54 a litre".
 - SERVOS RIGHT HERE: If the context says the driver is AT a servo, say so ("you're at one now"). If it lists NEARBY SERVOS instead, they are close but the driver is NOT in them — say "there are two right here, Ampol and BP, both about 300 metres" or similar. Never claim someone is at a servo when they are merely near one — a stranger in town would look around and see nothing. Either way, give the cheapest confirmed as the alternative so they can choose.
 - FUEL PRICES: If LOCAL FUEL or LIVE FUEL PRICES appear in context, they are real and current — the first is the cheapest, distances are true ROAD distances, and only price-reporting states are covered so nearby stations can be missing. Lead with the cheapest — name it, its price in dollars per litre the way people say it ("$1.79 a litre", converting 179.9 = $1.79), and its road distance. If a listed station is notably closer for a similar price, add it as a quick alternative in the second sentence. Never invent a price; if none are in context, name the best likely-cheap nearby station (independents and roadhouse chains over motorway servos) and add "price unconfirmed" — two words.
@@ -1985,14 +1986,21 @@ SOLO MODE (when flagged in context):
 // ── LIVE FUEL PRICES (via Worker /fuel route — NSW & TAS coverage) ───────────
 const FUEL_CODE = {'Unleaded 91':'U91','Premium 95':'P95','Premium 98':'P98','Diesel':'DL','E10':'E10'};
 
-// ── ROAD DISTANCE — true driving km via OSRM, one call for many destinations ──
+
+// "16 km, 17 minutes" — or just distance if timing is unavailable
+function distTime(s) {
+  const d = (s.km < 1) ? `${Math.round(s.km*1000)} metres` : `${s.km.toFixed(0)} km`;
+  return s.mins ? `${d}, ${s.mins} minutes` : d;
+}
+
+// ── ROAD DISTANCE & TIME — true driving km and minutes via OSRM, one call ─────
 // Falls back to straight-line if routing is unavailable, so a lookup never breaks.
 async function roadDistances(fromLat, fromLon, points) {
-  // points: [{lat, lon}, ...] — returns array of km (road) aligned to points
+  // points: [{lat, lon}, ...] — returns [{km, mins}] aligned to points (null if unavailable)
   if (!points.length) return [];
   try {
     const coords = [`${fromLon},${fromLat}`, ...points.map(p => `${p.lon},${p.lat}`)].join(';');
-    const url = `https://router.project-osrm.org/table/v1/driving/${coords}?sources=0&annotations=distance`;
+    const url = `https://router.project-osrm.org/table/v1/driving/${coords}?sources=0&annotations=distance,duration`;
     // Patient but bounded — a good partial beats a late-or-hung perfect answer
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 2500);
@@ -2000,10 +2008,15 @@ async function roadDistances(fromLat, fromLon, points) {
     clearTimeout(timer);
     const d = await r.json();
     if (d.code === 'Ok' && d.distances && d.distances[0]) {
-      return d.distances[0].slice(1).map(m => (m == null ? null : m / 1000));
+      const dist = d.distances[0].slice(1);
+      const dur  = (d.durations && d.durations[0]) ? d.durations[0].slice(1) : [];
+      return dist.map((m, i) => ({
+        km:   (m == null) ? null : m / 1000,
+        mins: (dur[i] == null) ? null : Math.round(dur[i] / 60),
+      }));
     }
   } catch(e) {}
-  return points.map(() => null); // signal fallback to crow-flies
+  return points.map(() => ({ km: null, mins: null }));
 }
 
 // Distance from a point to the nearest vertex of the route path (rough corridor test)
@@ -2068,13 +2081,22 @@ async function servosNearby() {
     const sr = await fetch(`${API_URL}stations?lat=${gps.lat}&lon=${gps.lon}&radius=15`);
     const sd = await sr.json();
     if (sd.results && sd.results.length) {
-      const near = sd.results
-        .map(s => ({ name: s.name, km: distKm(gps.lat, gps.lon, s.lat, s.lon), lat: s.lat, lon: s.lon }))
-        .sort((a,b) => a.km - b.km)
-        .filter(s => s.km <= 15)    // anything within 15km is worth knowing about
+      // Shortlist by crow-flies (cheap), then get TRUE road distance for those few.
+      // Straight-line is misleading in hill country — a servo "5km away" over the
+      // range can be a 20km drive.
+      const cands = sd.results
+        .map(s => ({ name: s.name, crow: distKm(gps.lat, gps.lon, s.lat, s.lon), lat: s.lat, lon: s.lon }))
+        .sort((a,b) => a.crow - b.crow)
+        .slice(0, 6);
+      if (!cands.length) return null;
+      const roads = await roadDistances(gps.lat, gps.lon, cands);
+      cands.forEach((c,i) => { c.km = (roads[i] && roads[i].km != null) ? roads[i].km : c.crow; c.mins = roads[i] ? roads[i].mins : null; });
+      const near = cands
+        .filter(s => s.km <= 20)          // within a 20km DRIVE
+        .sort((a,b) => a.km - b.km)       // nearest BY ROAD
         .slice(0, 3);
       if (!near.length) return null;
-      return { list: near, atOne: near[0].km <= 0.12 };   // 120m = genuinely at it
+      return { list: near, atOne: near[0].km <= 0.15 };
     }
   } catch(e) {}
   return null;
@@ -2082,12 +2104,11 @@ async function servosNearby() {
 
 function nearbyServoNote(nb) {
   if (!nb) return '';
-  const fmt = s => `${s.name} (${s.km < 1 ? Math.round(s.km*1000)+' metres' : s.km.toFixed(0)+' km'})`;
-  const names = nb.list.map(fmt).join(', ');
+  const names = nb.list.map(s => `${s.name} (${distTime(s)})`).join(', ');
   if (nb.atOne) {
     return ` NOTE: the driver is right at ${nb.list[0].name} now. It does NOT report a price. Say they're at one, price unconfirmed, then give the cheapest confirmed as the alternative.`;
   }
-  return ` UNPRICED SERVOS NEARBY (real servos, no live price reported): ${names}. If one of these is meaningfully closer than the cheapest confirmed, offer it as the no-detour alternative with its distance and "price unconfirmed".`;
+  return ` UNPRICED SERVOS NEARBY (real servos, no live price, distances and times by ROAD): ${names}. If the closest is meaningfully nearer than the cheapest confirmed, offer it BY NAME with its driving time and "price unconfirmed" — do not lump several together as "three servos at X".`;
 }
 
 async function fetchFuelPrices() {
@@ -2152,33 +2173,34 @@ async function fetchFuelPrices() {
       notePlaces(ahead.map(s => s.name));
       // Road distance only for the 3 finalists — one small, fast call
       const roads = await roadDistances(gps.lat, gps.lon, ahead);
-      ahead.forEach((s,i) => { s.km = (roads[i] != null) ? roads[i] : distKm(gps.lat, gps.lon, s.lat, s.lon); });
-      fuelShortlist = ahead.map(s => ({ name: s.name, price: s.price, km: s.km }));
+      ahead.forEach((s,i) => { s.km = (roads[i] && roads[i].km != null) ? roads[i].km : distKm(gps.lat, gps.lon, s.lat, s.lon); s.mins = roads[i] ? roads[i].mins : null; });
+      fuelShortlist = ahead.map(s => ({ name: s.name, price: s.price, km: s.km, mins: s.mins }));
       fuelDialIdx = 0;
       // Options to pin on the map — cheapest first
       window._pendingPins = ahead.slice(0,3).map(s => ({ name: s.name, price: s.price, km: s.km, lat: s.lat, lon: s.lon }));
-      const list = ahead.map(s => `${s.name} (${s.address}): ${s.price} c/L, ${s.km.toFixed(0)}km ahead, ${s.detour.toFixed(0)}km off route`).join('; ');
+      const list = ahead.map(s => `${s.name} (${s.address}): ${s.price} c/L, ${distTime(s)} ahead, ${s.detour.toFixed(0)}km off route`).join('; ');
 
-      // Are there servos right here? Say so honestly — don't route them past one.
-      const nbRoute = await servosNearby();
-      const underfootNote = nearbyServoNote(nbRoute);
+      // Same city/country logic: only hunt unpriced servos if the cheapest ahead
+      // is a real drive away. If there's a priced servo close ahead, that's enough.
+      const closestAheadKm = Math.min(...ahead.map(s => s.km));
+      let nbRoute = null, underfootNote = '';
+      if (closestAheadKm > 30) {
+        nbRoute = await servosNearby();
+        underfootNote = nearbyServoNote(nbRoute);
+      }
       // Pin a nearby unpriced servo too, so it's visible not just mentioned
       if (nbRoute && nbRoute.list && nbRoute.list.length && window._pendingPins) {
-        const u = nbRoute.list[0];
-        if (!window._pendingPins.some(p => p.name === u.name)) {
-          window._pendingPins.push({ name: u.name, price: null, km: u.km, lat: u.lat, lon: u.lon });
-        }
+        nbRoute.list.forEach(u => {
+          if (!window._pendingPins.some(p => p.name === u.name)) {
+            window._pendingPins.push({ name: u.name, price: null, km: u.km, lat: u.lat, lon: u.lon });
+          }
+        });
       }
 
       return `CHEAPEST FUEL AHEAD ON ROUTE to ${currentRunDest} — cheapest first, distances by road: ${list}.${underfootNote} Mention the detour off the highway; frame a worthwhile saving as a quick side-trip.`;
     }
 
     // NOT on a journey — cheapest LOCALLY (the errand case), with the dial.
-    // Check FIRST what servos are genuinely around us — must be said either way.
-    const nb = await servosNearby();
-    const underfootNote = nearbyServoNote(nb);
-    const underfootLocal = nb && nb.atOne ? nb.list[0] : null;
-
     // 20km is a realistic "nip out for fuel" radius, not a full tank's range.
     const r = await fetch(`${API_URL}fuel?lat=${gps.lat}&lon=${gps.lon}&type=${code}&radius=20`);
     const d = await r.json();
@@ -2188,26 +2210,38 @@ async function fetchFuelPrices() {
       const cands = usable.filter(s => s.lat && s.lon).slice(0, 12)
         .map(s => ({ name: s.name, address: s.address, price: s.price, lat: parseFloat(s.lat), lon: parseFloat(s.lon) }));
       const roads = await roadDistances(gps.lat, gps.lon, cands);
-      cands.forEach((c, i) => { c.km = (roads[i] != null) ? roads[i] : distKm(gps.lat, gps.lon, c.lat, c.lon); });
+      cands.forEach((c, i) => { c.km = (roads[i] && roads[i].km != null) ? roads[i].km : distKm(gps.lat, gps.lon, c.lat, c.lon); c.mins = roads[i] ? roads[i].mins : null; });
       // Frozen dial: cheapest first, then the rest by true road distance
       const cheapest = cands[0];
       const rest = cands.slice(1).sort((a,b) => a.km - b.km);
-      fuelShortlist = cheapest ? [{name:cheapest.name, price:cheapest.price, km:cheapest.km}, ...rest.map(s=>({name:s.name, price:s.price, km:s.km}))] : [];
+      fuelShortlist = cheapest ? [{name:cheapest.name, price:cheapest.price, km:cheapest.km, mins:cheapest.mins}, ...rest.map(s=>({name:s.name, price:s.price, km:s.km, mins:s.mins}))] : [];
       fuelDialIdx = 0;
       // Offer up to THREE genuine choices: the cheapest, then the two nearest that aren't it
       const nearest = cands.slice().sort((a,b) => a.km - b.km);
       const picks = [cheapest];
       for (const s of nearest) { if (picks.length >= 3) break; if (!picks.includes(s)) picks.push(s); }
+
+      // CITY vs COUNTRY: if a priced servo is close (under 30km), that's all you need —
+      // don't clutter the answer with unpriced alternatives. Only when the nearest
+      // priced servo is a real drive away does "can I get there" start to matter.
+      const nearestPricedKm = nearest.length ? nearest[0].km : 999;
+      let nb = null, underfootNote = '';
+      if (nearestPricedKm > 30) {
+        nb = await servosNearby();
+        underfootNote = nearbyServoNote(nb);
+      }
+
       // Options to pin on the map — cheapest first, plus any nearby unpriced servo
       window._pendingPins = picks.map(s => ({ name: s.name, price: s.price, km: s.km, lat: s.lat, lon: s.lon }));
       if (nb && nb.list && nb.list.length) {
-        // Add the closest unpriced servo so it's visible, not just mentioned
-        const u = nb.list[0];
-        if (!window._pendingPins.some(p => p.name === u.name)) {
-          window._pendingPins.push({ name: u.name, price: null, km: u.km, lat: u.lat, lon: u.lon });
-        }
+        // Pin the nearby unpriced servos too — visible, not just mentioned
+        nb.list.forEach(u => {
+          if (!window._pendingPins.some(p => p.name === u.name)) {
+            window._pendingPins.push({ name: u.name, price: null, km: u.km, lat: u.lat, lon: u.lon });
+          }
+        });
       }
-      const list = picks.map(s => `${s.name} (${s.address}): ${s.price} c/L, ${s.km.toFixed(0)}km by road`).join('; ');
+      const list = picks.map(s => `${s.name} (${s.address}): ${s.price} c/L, ${distTime(s)} by road`).join('; ');
 
       return `LOCAL FUEL (within 20km) — first is CHEAPEST, the others are NEAREST, all distances by ROAD, price-reporting states only: ${list}.${underfootNote} Lead with the cheapest; if an unpriced servo is meaningfully closer, offer it as the no-detour alternative.`;
     }
@@ -2509,13 +2543,13 @@ async function openSOS() {
     const byKind = k => places.filter(p=>p.kind===k).sort((a,b)=>a.crow-b.crow).slice(0,4);
     const shortlist = [...byKind('hospital'), ...byKind('clinic'), ...byKind('police')];
     const roads = await roadDistances(gps.lat, gps.lon, shortlist);
-    shortlist.forEach((p,i)=>{ p.km = (roads[i]!=null)?roads[i]:p.crow; });
+    shortlist.forEach((p,i)=>{ p.km = (roads[i] && roads[i].km!=null)?roads[i].km:p.crow; p.mins = roads[i] ? roads[i].mins : null; });
 
     const hosp   = shortlist.filter(p=>p.kind==='hospital').sort((a,b)=>a.km-b.km)[0];
     const clinic = shortlist.filter(p=>p.kind==='clinic').sort((a,b)=>a.km-b.km)[0];
     const pol    = shortlist.filter(p=>p.kind==='police').sort((a,b)=>a.km-b.km)[0];
 
-    const row=(icon,p,typeNote)=> p ? `<div class="sos-help-row"><div><div class="sos-help-name">${icon} ${p.name}</div><div class="sos-help-dist">${p.km.toFixed(0)}km by road${typeNote}</div></div><button class="sos-nav" onclick="navigateTo('${p.name.replace(/'/g,"")}')">Navigate</button></div>` : '';
+    const row=(icon,p,typeNote)=> p ? `<div class="sos-help-row"><div><div class="sos-help-name">${icon} ${p.name}</div><div class="sos-help-dist">${p.km.toFixed(0)}km${p.mins ? ', about ' + p.mins + ' min' : ''} by road${typeNote}</div></div><button class="sos-nav" onclick="navigateTo('${p.name.replace(/'/g,"")}')">Navigate</button></div>` : '';
     let html = '';
     if (hosp)   html += row('🏥', hosp, hosp.hasED ? ' · listed with emergency dept' : ' · hospital');
     if (clinic && (!hosp || clinic.km < hosp.km)) html += row('➕', clinic, ' · medical centre, may be daytime only');
