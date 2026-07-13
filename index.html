@@ -95,7 +95,7 @@
   .welcome p{font-size:11px;color:var(--gray2);line-height:1.5;}
 
   /* QUICK SUGGESTION ROW */
-  .suggestion-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+  .suggestion-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;}
   .suggestion{background:var(--navy2);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 4px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:5px;}
   .suggestion:hover,.suggestion:active{border-color:var(--amber);background:rgba(245,166,35,0.06);}
   .sug-icon{font-size:26px;line-height:1;}
@@ -288,9 +288,10 @@
 <!-- START OVERLAY -->
 <div class="start-overlay hidden" id="startOverlay">
   <div class="start-logo">🧭</div>
-  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 11 Jul 2026, 07:20 PM AEST</div>
+  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 11 Jul 2026, 08:00 PM AEST</div>
   <div class="start-title" id="startTitle">Welcome to <span>Navigator</span></div>
   <div class="start-sub">Your AI co-pilot for the road. Tell me where you're heading — I'll size up the journey.</div>
+  <div id="vehiclePrompt" style="margin:0 0 14px;"></div>
   <div class="start-btns">
     <div class="start-btn quick" id="resumeBtn" style="display:none;border-color:var(--amber);" onclick="resumeTrip()">
       <div class="start-btn-title" id="resumeTitle">▶ Resume trip</div>
@@ -672,7 +673,8 @@ const VEHICLES = {
     rangeLabel: '50km',
     suggestions: [
       { icon:'⛽', label:'Servo',  desc:'check options', query:'Cheapest fuel within 20km' },
-      { icon:'☕', label:'Coffee', desc:'break / stretch', query:'Find me a coffee or a good spot to stop and stretch my legs near me' },
+      { icon:'☕', label:'Coffee', desc:'quick stop', query:'Nearest coffee — where can I stop for a quick cuppa and a stretch?' },
+      { icon:'🍽', label:'Eat',    desc:'food nearby', query:'Nearest decent place to eat, and public toilets if there are any' },
     ],
     systemNote: 'Vehicle: standard car, no towing. Fuel range approximately 50km before next stop needed. Normal parking, any fuel station. Toll roads and traffic congestion are relevant — wind impact is not significant for a car and should not be raised unless conditions are genuinely severe.',
   },
@@ -682,8 +684,9 @@ const VEHICLES = {
     range: 300,
     rangeLabel: '300km',
     suggestions: [
-      { icon:'⛽', label:'Servo',  desc:'check options', query:'Cheapest fuel in the next 300km I can get into with the van' },
-      { icon:'☕', label:'Coffee', desc:'break / stretch', query:'Find me a coffee or a good spot to stop and stretch my legs near me' },
+      { icon:'⛽', label:'Servo',  desc:'van access', query:'Cheapest fuel in the next 300km I can get into with the van' },
+      { icon:'☕', label:'Coffee', desc:'quick stop', query:'Nearest coffee — where can I stop for a quick cuppa and a stretch?' },
+      { icon:'🏕', label:'Camp',   desc:'park tonight', query:'Where can I stay tonight? Caravan park or campsite, powered site and dump point if possible' },
     ],
     systemNote: 'Vehicle: car towing a caravan. All stops must have caravan-accessible forecourts — wide entry, drive-through, no boom gates, room to manoeuvre. Flag any access issues explicitly. Wind significantly affects towing stability and fuel range — always relevant.',
   },
@@ -694,7 +697,8 @@ const VEHICLES = {
     rangeLabel: '200km',
     suggestions: [
       { icon:'⛽', label:'Servo',  desc:'check options', query:'Cheapest fuel in the next 200km for a campervan' },
-      { icon:'☕', label:'Coffee', desc:'break / stretch', query:'Find me a coffee or a good spot to stop and stretch my legs near me' },
+      { icon:'☕', label:'Coffee', desc:'quick stop', query:'Nearest coffee — where can I stop for a quick cuppa and a stretch?' },
+      { icon:'🏕', label:'Camp',   desc:'free camp', query:'Where can I camp tonight? Free or low-cost spots preferred, we are self-contained' },
     ],
     systemNote: 'Vehicle: self-contained campervan. Prioritise free and low-cost camping spots over paid caravan parks where self-contained facilities allow it — this is a key differentiator from caravan mode. Height clearance may be relevant. Range approximately 200km between fuel stops.',
   },
@@ -704,8 +708,9 @@ const VEHICLES = {
     range: 400,
     rangeLabel: '400km',
     suggestions: [
-      { icon:'⛽', label:'Servo',  desc:'check options', query:'Cheapest diesel in the next 400km suitable for a truck' },
-      { icon:'☕', label:'Coffee', desc:'break / stretch', query:'Find me a coffee or a good spot to stop and stretch my legs near me' },
+      { icon:'⛽', label:'Servo',  desc:'truck diesel', query:'Cheapest diesel in the next 400km suitable for a truck' },
+      { icon:'☕', label:'Coffee', desc:'quick stop', query:'Nearest truck-friendly stop for a coffee and a break, somewhere I can park the rig' },
+      { icon:'😴', label:'Rest',   desc:'break stop', query:'I need a proper rest break — nearest truck stop with parking, facilities and food' },
     ],
     systemNote: 'Vehicle: truck. Requires truck-friendly fuel stops with diesel, adequate clearance, and room to manoeuvre. Always flag low bridges and weight restrictions proactively. Driving hour limits are a legal compliance requirement in Australia — when asked about rest breaks, treat this as mandatory, not optional, and reference fatigue management regulations if drive time suggests it is relevant. Range approximately 400km.',
   },
@@ -841,6 +846,7 @@ function applyProfile() {
   if (userVehicles.length) {
     selectVehicle(userVehicles[0]);
   }
+  renderVehiclePrompt();
 }
 
 function loadProfile() {
@@ -939,6 +945,44 @@ async function whereTo() {
     hideTyping();
     addMsg('nav', 'Routing hiccup — ask me anything and we\'ll sort it as we go.');
   }
+}
+
+// ── WHAT ARE YOU DRIVING? ─────────────────────────────────────────────────────
+// Own one vehicle → state it (no friction, but visible if wrong).
+// Own several → ask, because the wrong vehicle means wrong advice all day.
+function renderVehiclePrompt() {
+  const el = document.getElementById('vehiclePrompt');
+  if (!el) return;
+  const owned = (userVehicles && userVehicles.length) ? userVehicles : ['car'];
+
+  if (owned.length === 1) {
+    const v = VEHICLES[owned[0]];
+    el.innerHTML = `<div style="text-align:center;font-size:13px;color:var(--gray2);">
+        Driving your <b style="color:var(--amber);">${v.icon} ${v.label}</b> today?
+        <span onclick="editSetup()" style="color:var(--gray3);text-decoration:underline;cursor:pointer;margin-left:4px;">change</span>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="text-align:center;font-size:13px;color:var(--gray1);margin-bottom:8px;">What are you driving today?</div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+      ${owned.map(k => {
+        const v = VEHICLES[k];
+        const on = (k === currentVehicle);
+        return `<button onclick="pickTodaysVehicle('${k}')"
+          style="background:${on ? 'rgba(245,166,35,0.15)' : 'var(--navy3)'};
+                 border:1px solid ${on ? 'var(--amber)' : 'rgba(255,255,255,0.12)'};
+                 color:${on ? 'var(--amber)' : 'var(--gray1)'};
+                 border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+          ${v.icon} ${v.label}</button>`;
+      }).join('')}
+    </div>`;
+}
+
+function pickTodaysVehicle(k) {
+  selectVehicle(k);
+  renderVehiclePrompt();
 }
 
 // ── START OVERLAY / TRIP SETUP ────────────────────────────────────────────────
@@ -1317,8 +1361,11 @@ function updateSuggestions() {
   if (!grid) return;
   // The sub-label says which brain is running, so the behaviour is never a surprise
   const onTrip = !!currentRunDest;
-  const modeDesc = { 'Servo': onTrip ? 'ahead on route' : 'nearby',
-                     'Coffee': onTrip ? 'on your way'   : 'nearby' };
+  const modeDesc = onTrip
+    ? { 'Servo':'ahead on route', 'Coffee':'on your way', 'Eat':'on your way',
+        'Camp':'tonight', 'Rest':'ahead' }
+    : { 'Servo':'nearby', 'Coffee':'nearby', 'Eat':'nearby',
+        'Camp':'tonight', 'Rest':'nearby' };
   grid.innerHTML = v.suggestions.map(s => `
     <div class="suggestion" onclick="suggest('${s.query.replace(/'/g,"\\'")}')">
       <span class="sug-icon">${s.icon}</span>
@@ -1972,6 +2019,7 @@ RULES:
 - BANNED: apologies, hedging, "I'd suggest", "you might want to", "it's worth noting", restating the question, describing what you can't do.
 - NEVER mention your context, lists, data sources, tools, or how you know things — speak as though you simply know. Never tell the driver to use another app, website, or service under ANY circumstances, including when you lack data: if nothing is mapped nearby, say "none mapped within [X]km — nearest likely in [town]" and stop.
 - No explanations. No suggestions to check other apps. No fluff.
+- NEAREST MEANS NEAREST: When the driver wants a coffee, a chemist, a gym — they want the CLOSEST decent one, not the most scenic or interesting. Lead with the nearest from the list. Never send someone half an hour up a mountain for a cuppa. Only mention somewhere further if the driver asked for something specific (a view, a proper meal, a particular chain).
 - THE MAP SHOWS EVERYTHING: Whatever you name from a NEARBY list is already pinned on the driver's map — they can see it and tap it to navigate. So summarise, don't recite. Lead with the best option and its driving time; mention one alternative if it's genuinely useful. Never read out a long list.
 - NEARBY LISTS ARE GROUND TRUTH: Any NEARBY list in context (fuel stations, gyms, cafes, chemists, supermarkets, etc.) is real OpenStreetMap data sorted nearest first. For any nearest/closest request, answer with the first suitable entry from the relevant list — NEVER estimate proximity from your own memory; your geographic recall of small towns is unreliable. If the driver asks for several ("the 3 nearest gyms"), list up to three from the list with distances in one sentence — that is allowed and expected. Never invent policies such as "one result per reply"; no such rule exists. If a list says none found, say so and name the nearest sizeable town.
 - MULTI-ERRAND: If the driver names two errands ("gym then coffee"), name the nearest suitable place for each from their lists in sentence 1, and navigate to the first errand in sentence 2.
@@ -2615,6 +2663,7 @@ function resetConversation() {
   hideWhere();
   renderResumeTrip();     // Resume/Clear cards reflect any active trip
   renderSavedTrips();
+  renderVehiclePrompt();
   updateGreeting();
   document.getElementById('startOverlay').classList.remove('hidden');
 }
@@ -2822,6 +2871,7 @@ loadMapPreference();
 loadProfile();
 renderSavedTrips();
 renderResumeTrip();
+renderVehiclePrompt();
 setInterval(fetchWeather,600000);
 checkVersion();
 setInterval(checkVersion, 900000);
