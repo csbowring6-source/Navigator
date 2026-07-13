@@ -394,7 +394,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 11 Jul 2026<br>11:35 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 11 Jul 2026<br>12:00 PM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel" class="map-label-text">Apple Maps</span> ▾
@@ -455,8 +455,8 @@
 <div class="context-panel">
   <div class="ctx-chip active" id="vehicleChip" onclick="openVehicleSheet()">🚗 Car</div>
   <div class="ctx-chip" id="soloChip" onclick="toggleChip(this)">🧍 Solo</div>
-  <div class="ctx-chip" id="fuelTypeChip" onclick="setFuelType()">⛽ U91</div>
-  <div class="ctx-chip" id="rangeChip" onclick="setRange()">🛣 Range</div>
+  <div class="ctx-chip" id="fuelTypeChip" onclick="setFuelType()" style="display:none;">⛽ U91</div>
+  <div class="ctx-chip" id="rangeChip" onclick="setRange()" style="display:none;">🛣 Range</div>
   <div class="ctx-chip" id="condChip" onclick="setCond()">🌤 Conditions</div>
   <div class="ctx-chip" id="logChip" onclick="openFillSheet()">📒 Fill-up</div>
 </div>
@@ -1619,17 +1619,25 @@ function applyConditions() {
 // behaviour, unsuppressable from a browser) — reserved for the native app.
 let convoEnabled = false;
 
-function toggleWakeWord() {
-  convoEnabled = !convoEnabled;
+let convoSilentTurns = 0;   // how many times the mic opened and heard nothing
+
+function setConvo(on) {
+  convoEnabled = on;
   const b = document.getElementById('wakeBtn');
-  if (convoEnabled) {
-    b.textContent = '🎙 Conversation: On — mic reopens after each reply';
+  if (on) {
+    convoSilentTurns = 0;
+    b.textContent = '🎙 Conversation: On — say "close" when done';
     b.classList.add('active');
     unlockAudio();
   } else {
     b.textContent = '🎙 Conversation: Off';
     b.classList.remove('active');
+    try { if (recognition && isListening) recognition.stop(); } catch(e) {}
   }
+}
+
+function toggleWakeWord() {
+  setConvo(!convoEnabled);
 }
 
 // ── VOICE ─────────────────────────────────────────────────────────────────────
@@ -1694,7 +1702,18 @@ function startListening() {
     resetVoiceUI();
     // Always send whatever was captured — prevents the mic ending with an unsent command
     const pending=document.getElementById('userInput').value.trim();
-    if(pending.length>1 && !busy) sendMessage();
+    if(pending.length>1 && !busy) {
+      convoSilentTurns = 0;      // they spoke — still in the conversation
+      sendMessage();
+    } else if (convoEnabled) {
+      // Mic opened and heard nothing useful — after two of these, go to sleep
+      convoSilentTurns++;
+      if (convoSilentTurns >= 2) {
+        setConvo(false);
+        setVoiceStatus('', '🎙 Conversation ended — tap the mic when you need me');
+        setTimeout(()=>setVoiceStatus('',''), 4000);
+      }
+    }
   };
   try { recognition.start(); } catch(e) { resetVoiceUI(); }
 }
@@ -2502,6 +2521,17 @@ async function sendMessage(){
   if (/^(say again|say that again|repeat( that)?|come again|what did you say|pardon|again please|can you repeat)\b/i.test(text)) {
     inp.value=''; inp.style.height='auto';
     if (lastSpoken) { synth?.cancel(); speak(lastSpoken); }
+    return;
+  }
+
+  // "Close" / "that's all" — turn off conversation mode without a round-trip
+  if (/^(close|that'?s all|that is all|i'?m (all )?(done|finished)|finished|stop listening|goodbye|bye|thanks that'?s all)\b/i.test(text)) {
+    inp.value=''; inp.style.height='auto';
+    if (convoEnabled) {
+      setConvo(false);
+      const bye = 'Righto — conversation off. Tap the mic when you need me.';
+      addMsg('nav', bye); lastSpoken = bye; speak(bye);
+    }
     return;
   }
 
