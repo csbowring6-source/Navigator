@@ -288,7 +288,7 @@
 <!-- START OVERLAY -->
 <div class="start-overlay hidden" id="startOverlay">
   <div class="start-logo">🧭</div>
-  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 11 Jul 2026, 02:30 PM AEST</div>
+  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 11 Jul 2026, 02:50 PM AEST</div>
   <div class="start-title" id="startTitle">Welcome to <span>Navigator</span></div>
   <div class="start-sub">Your AI co-pilot for the road. Tell me where you're heading — I'll size up the journey.</div>
   <div class="start-btns">
@@ -2550,13 +2550,15 @@ function resetConversation() {
   clearOptionPins();
   window._pendingPins = null;
   document.getElementById('userInput').value = '';
-  document.getElementById('chatArea').innerHTML = '';     // wipe the visible chat
+  // A fresh start IS the welcome screen — rebuild it, chips and all.
+  // (No greeting message: addMsg would immediately remove the welcome block.)
+  document.getElementById('chatArea').innerHTML =
+    '<div class="welcome" id="welcome"><div class="suggestion-grid" id="suggestionGrid"></div></div>';
+  updateSuggestions();
   busy = false;
   document.getElementById('sendBtn').disabled = false;
-  const msg = currentRunDest
-    ? `Fresh start — still on your ${currentRunDest} trip. What do you need?`
-    : 'Fresh start. What do you need?';
-  addMsg('nav', msg);
+  setVoiceStatus('', currentRunDest ? `Fresh start — still on your ${currentRunDest} trip` : 'Fresh start');
+  setTimeout(()=>setVoiceStatus('',''), 3000);
 }
 
 // ── SEND ──────────────────────────────────────────────────────────────────────
