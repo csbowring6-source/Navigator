@@ -394,7 +394,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 11 Jul 2026<br>10:15 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 11 Jul 2026<br>10:45 AM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel" class="map-label-text">Apple Maps</span> ▾
@@ -2077,6 +2077,13 @@ async function fetchFuelPrices() {
     }
 
     // NOT on a journey — cheapest LOCALLY (the errand case), with the dial.
+    // Check FIRST whether we're standing at a servo — this must be said whether
+    // or not any priced servos come back.
+    const underfootLocal = await servoUnderfoot();
+    const underfootNote = underfootLocal
+      ? ` NOTE: the driver is right now at ${underfootLocal.name} (${(underfootLocal.km*1000).toFixed(0)}m away), which does NOT report a price. Lead with that — say they're at one now, price unconfirmed — then give the cheapest confirmed as the alternative so they can choose.`
+      : '';
+
     // 20km is a realistic "nip out for fuel" radius, not a full tank's range.
     const r = await fetch(`${API_URL}fuel?lat=${gps.lat}&lon=${gps.lon}&type=${code}&radius=20`);
     const d = await r.json();
@@ -2102,12 +2109,9 @@ async function fetchFuelPrices() {
 
       // A closer servo may exist that simply doesn't report a price — always check,
       // and shout about it if the driver is practically standing at one.
-      let closerNote = '';
+      let closerNote = underfootNote;
       const nearestPricedKm = nearest.length ? nearest[0].km : 999;
-      const underfoot = await servoUnderfoot();
-      if (underfoot) {
-        closerNote = ` NOTE: the driver is right now at ${underfoot.name} (${(underfoot.km*1000).toFixed(0)}m away), which does NOT report a price. Say they're at one now, price unconfirmed, and offer the cheapest confirmed as the alternative — let them choose.`;
-      } else {
+      if (!underfootLocal) {
         try {
           const sr = await fetch(`${API_URL}stations?lat=${gps.lat}&lon=${gps.lon}&radius=20`);
           const sd = await sr.json();
@@ -2125,17 +2129,20 @@ async function fetchFuelPrices() {
       }
       return `LOCAL FUEL (within 20km) — first is CHEAPEST, the others are NEAREST, all distances by ROAD, price-reporting states only: ${list}.${closerNote} Lead with the cheapest; if a closer servo is noted, offer it as the no-detour alternative.`;
     }
-    // Thin area: nothing reporting a price within 20km. Offer the nearest actual servo.
+    // Thin area: nothing reporting a price within 20km. Offer the nearest actual servos.
     try {
       const sr = await fetch(`${API_URL}stations?lat=${gps.lat}&lon=${gps.lon}&radius=25`);
       const sd = await sr.json();
       if (sd.results && sd.results.length) {
         const near = sd.results
-          .map(s => ({ name: s.name, km: distKm(gps.lat, gps.lon, s.lat, s.lon) }))
+          .map(s => ({ name: s.name, km: distKm(gps.lat, gps.lon, s.lat, s.lon), lat: s.lat, lon: s.lon }))
           .sort((a,b) => a.km - b.km).slice(0, 3);
         notePlaces(near.map(s => s.name));
-        const list = near.map(s => `${s.name}, ${s.km.toFixed(0)}km`).join('; ');
-        return `NO PRICED SERVOS NEARBY (thin area) — nearest actual servos, no live prices: ${list}. Name the closest, say prices aren't reported out here, and add "price unconfirmed".`;
+        // Pin them on the map — they're real servos, just without live prices
+        window._pendingPins = near.map(s => ({ name: s.name, price: null, km: s.km, lat: s.lat, lon: s.lon }));
+        const list = near.map(s => `${s.name}, ${s.km < 1 ? (s.km*1000).toFixed(0)+'m' : s.km.toFixed(0)+'km'}`).join('; ');
+        const atOne = near[0] && near[0].km <= 1.5;
+        return `NO PRICED SERVOS NEARBY — none in this area report live prices. Actual servos here, nearest first: ${list}. ${atOne ? 'The driver is right at the first one — lead with that.' : 'Name the closest.'} Say prices aren't reported around here, add "price unconfirmed", and if there are two or more nearby, mention both so they can choose.`;
       }
     } catch(e) {}
   } catch(e) {}
