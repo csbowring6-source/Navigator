@@ -394,7 +394,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 11 Jul 2026<br>10:45 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 11 Jul 2026<br>11:15 AM AEST</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel" class="map-label-text">Apple Maps</span> ▾
@@ -1895,7 +1895,7 @@ RULES:
 - MULTI-ERRAND: If the driver names two errands ("gym then coffee"), name the nearest suitable place for each from their lists in sentence 1, and navigate to the first errand in sentence 2.
 - NEAREST vs CHEAPEST: Two different questions with two different data sources. NEARBY FUEL STATIONS in context is the ground truth for proximity — for any "nearest/closest" question answer with its first entry, never your own guess and never a price-list station. LIVE FUEL PRICES is the ground truth for price — for "cheapest" questions use it and state the distance; if the cheapest confirmed station is more than about 25km away you MUST also name the nearest station from NEARBY FUEL STATIONS with "price unconfirmed" — the driver chooses, not you.
 - FUEL AHEAD ON ROUTE: If CHEAPEST FUEL AHEAD ON ROUTE appears in context, the driver is on a journey — give the cheapest servo ahead on their route, its price in dollars per litre, how far ahead, and the detour off the highway. Frame a worthwhile saving as a good little side-trip; if the cheapest is a big detour, say so and offer the nearest-ahead as the no-fuss alternative.
-- SERVO UNDERFOOT: If the context notes the driver is right now AT a servo that doesn't report a price, lead with that — "you're at one now, price unconfirmed" — then give the cheapest confirmed as the alternative with its distance. Never silently route them past a servo they're standing in.
+- SERVOS RIGHT HERE: If the context says the driver is AT a servo, say so ("you're at one now"). If it lists NEARBY SERVOS instead, they are close but the driver is NOT in them — say "there are two right here, Ampol and BP, both about 300m" or similar. Never claim someone is at a servo when they are merely near one — a stranger in town would look around and see nothing. Either way, give the cheapest confirmed as the alternative so they can choose.
 - FUEL PRICES: If LOCAL FUEL or LIVE FUEL PRICES appear in context, they are real and current — the first is the cheapest, distances are true ROAD distances, and only price-reporting states are covered so nearby stations can be missing. Lead with the cheapest — name it, its price in dollars per litre the way people say it ("$1.79 a litre", converting 179.9 = $1.79), and its road distance. If a listed station is notably closer for a similar price, add it as a quick alternative in the second sentence. Never invent a price; if none are in context, name the best likely-cheap nearby station (independents and roadhouse chains over motorway servos) and add "price unconfirmed" — two words.
 - CAMPS/PARKS: If NEARBY CAMPS/PARKS data appears in context, prefer naming real sites from it, blended with your own knowledge of well-known parks — the data is real but may be incomplete. Solo mode filters still apply.
 - ACCOMMODATION: If NEARBY ACCOMMODATION data appears in context, match the tier to the request — "treat ourselves"/luxury = highest stars or best-known quality property; "cheap"/backpackers = hostels and budget motels; otherwise the best-fit nearest. Never state a price or vacancy — you don't have them. Blend with your own knowledge of well-known properties. Solo mode filters still apply.
@@ -1998,6 +1998,36 @@ async function servoUnderfoot() {
   return null;
 }
 
+// What servos are genuinely close by? Returns the nearest few with honest distances.
+// "At one" means AT one (under ~120m) — not "somewhere within a kilometre".
+async function servosNearby() {
+  if (!gps) return null;
+  try {
+    const sr = await fetch(`${API_URL}stations?lat=${gps.lat}&lon=${gps.lon}&radius=5`);
+    const sd = await sr.json();
+    if (sd.results && sd.results.length) {
+      const near = sd.results
+        .map(s => ({ name: s.name, km: distKm(gps.lat, gps.lon, s.lat, s.lon), lat: s.lat, lon: s.lon }))
+        .sort((a,b) => a.km - b.km)
+        .filter(s => s.km <= 3)     // within 3km = "around here"
+        .slice(0, 3);
+      if (!near.length) return null;
+      return { list: near, atOne: near[0].km <= 0.12 };   // 120m = genuinely at it
+    }
+  } catch(e) {}
+  return null;
+}
+
+function nearbyServoNote(nb) {
+  if (!nb) return '';
+  const fmt = s => `${s.name} (${s.km < 1 ? Math.round(s.km*1000)+'m' : s.km.toFixed(1)+'km'})`;
+  const names = nb.list.map(fmt).join(', ');
+  if (nb.atOne) {
+    return ` NOTE: the driver is right at ${nb.list[0].name} now. It does NOT report a price. Say they're at one, price unconfirmed, then give the cheapest confirmed as the alternative.`;
+  }
+  return ` NEARBY SERVOS (no live prices reported): ${names}. These are close by but the driver is NOT standing in them — say there are servos right here / just up the road, name them, price unconfirmed, then give the cheapest confirmed as the alternative.`;
+}
+
 async function fetchFuelPrices() {
   if (!gps) return '';
   try {
@@ -2067,22 +2097,18 @@ async function fetchFuelPrices() {
       window._pendingPins = ahead.slice(0,3).map(s => ({ name: s.name, price: s.price, km: s.km, lat: s.lat, lon: s.lon }));
       const list = ahead.map(s => `${s.name} (${s.address}): ${s.price} c/L, ${s.km.toFixed(0)}km ahead, ${s.detour.toFixed(0)}km off route`).join('; ');
 
-      // Are we sitting at a servo right now? Say so — don't send them past it.
-      const underfoot = await servoUnderfoot();
-      const underfootNote = underfoot
-        ? ` NOTE: the driver is right now at ${underfoot.name} (${(underfoot.km*1000).toFixed(0)}m away) which does NOT report a price. Say they're at one now, price unconfirmed, and give the cheapest confirmed as the alternative — let them choose.`
-        : '';
+      // Are there servos right here? Say so honestly — don't route them past one.
+      const nbRoute = await servosNearby();
+      const underfootNote = nearbyServoNote(nbRoute);
 
       return `CHEAPEST FUEL AHEAD ON ROUTE to ${currentRunDest} — cheapest first, distances by road: ${list}.${underfootNote} Mention the detour off the highway; frame a worthwhile saving as a quick side-trip.`;
     }
 
     // NOT on a journey — cheapest LOCALLY (the errand case), with the dial.
-    // Check FIRST whether we're standing at a servo — this must be said whether
-    // or not any priced servos come back.
-    const underfootLocal = await servoUnderfoot();
-    const underfootNote = underfootLocal
-      ? ` NOTE: the driver is right now at ${underfootLocal.name} (${(underfootLocal.km*1000).toFixed(0)}m away), which does NOT report a price. Lead with that — say they're at one now, price unconfirmed — then give the cheapest confirmed as the alternative so they can choose.`
-      : '';
+    // Check FIRST what servos are genuinely around us — must be said either way.
+    const nb = await servosNearby();
+    const underfootNote = nearbyServoNote(nb);
+    const underfootLocal = nb && nb.atOne ? nb.list[0] : null;
 
     // 20km is a realistic "nip out for fuel" radius, not a full tank's range.
     const r = await fetch(`${API_URL}fuel?lat=${gps.lat}&lon=${gps.lon}&type=${code}&radius=20`);
@@ -2108,10 +2134,10 @@ async function fetchFuelPrices() {
       const list = picks.map(s => `${s.name} (${s.address}): ${s.price} c/L, ${s.km.toFixed(0)}km by road`).join('; ');
 
       // A closer servo may exist that simply doesn't report a price — always check,
-      // and shout about it if the driver is practically standing at one.
+      // and be honest about whether they're AT one or merely near one.
       let closerNote = underfootNote;
       const nearestPricedKm = nearest.length ? nearest[0].km : 999;
-      if (!underfootLocal) {
+      if (!nb) {
         try {
           const sr = await fetch(`${API_URL}stations?lat=${gps.lat}&lon=${gps.lon}&radius=20`);
           const sd = await sr.json();
