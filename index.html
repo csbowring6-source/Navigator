@@ -288,7 +288,7 @@
 <!-- START OVERLAY -->
 <div class="start-overlay hidden" id="startOverlay">
   <div class="start-logo">🧭</div>
-  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 13 Jul 2026, 03:15 PM AEST</div>
+  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 13 Jul 2026, 03:45 PM AEST</div>
   <div class="start-title" id="startTitle">Welcome to <span>Navigator</span></div>
   <div class="start-sub">Your AI co-pilot for the road. Tap the mic and just tell me.</div>
   <div id="vehiclePrompt" style="margin:0 0 14px;"></div>
@@ -2882,6 +2882,7 @@ function resetConversation() {
   synth?.cancel();
   try { if (recognition && isListening) recognition.stop(); } catch(e) {}
   if (convoEnabled) setConvo(false);   // don't leave the mic listening at the front door
+  try { localStorage.removeItem(SESSION_KEY); } catch(e) {}   // fresh start = no session to restore
   messages.length = 0;              // forget the exchange
   lastNavReply = ''; lastSpoken = '';
   knownPlaces = [];
@@ -2903,6 +2904,73 @@ function resetConversation() {
   updateGreeting();
   document.getElementById('startOverlay').classList.remove('hidden');
 }
+
+// ── SESSION RESTORE — Android kills the page when you switch apps. Come back
+// to where you were, not the start screen.
+const SESSION_KEY = 'navigator_session';
+const SESSION_MAX_AGE = 4 * 60 * 60 * 1000;   // 4 hours — same drive, same session
+
+function saveSession() {
+  try {
+    const inChat = document.getElementById('startOverlay')?.classList.contains('hidden');
+    if (!inChat) { localStorage.removeItem(SESSION_KEY); return; }   // on start screen = nothing to restore
+    const chatHtml = document.getElementById('chatArea')?.innerHTML || '';
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      ts: Date.now(),
+      chat: chatHtml.slice(0, 200000),      // keep it sane
+      messages: messages.slice(-12),        // recent turns only
+      runDest: currentRunDest,
+      tripCtx: tripContext,
+      vehicle: currentVehicle,
+      solo: document.getElementById('soloChip')?.classList.contains('active') || false,
+      pins: window._pendingPins || [],
+      knownPlaces: knownPlaces.slice(-20),
+      lastSpoken,
+    }));
+  } catch(e) {}
+}
+
+function restoreSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    if (!s || !s.ts || Date.now() - s.ts > SESSION_MAX_AGE) {
+      localStorage.removeItem(SESSION_KEY);
+      return false;
+    }
+    // Put everything back
+    if (s.vehicle && VEHICLES[s.vehicle]) selectVehicle(s.vehicle);
+    if (s.solo) document.getElementById('soloChip')?.classList.add('active');
+    currentRunDest = s.runDest || '';
+    tripContext = s.tripCtx || '';
+    messages.length = 0;
+    (s.messages || []).forEach(m => messages.push(m));
+    knownPlaces = s.knownPlaces || [];
+    lastSpoken = s.lastSpoken || '';
+    if (s.chat) {
+      // Buttons with JS-attached handlers won't work after a reload — strip them
+      // rather than leave dead buttons that do nothing when tapped.
+      const clean = s.chat.replace(/<button(?![^>]*onclick)[^>]*>[\s\S]*?<\/button>/gi, '')
+                          .replace(/<div class="feedback-row">[\s\S]*?<\/div>/gi, '');
+      document.getElementById('chatArea').innerHTML = clean;
+    }
+    document.getElementById('startOverlay').classList.add('hidden');
+    updateSuggestions();
+    // Redraw the route and pins once the map is ready
+    if (currentRunDest) setTimeout(() => plotTripRoute(currentRunDest), 800);
+    if (s.pins && s.pins.length) setTimeout(() => showOptionPins(s.pins), 1000);
+    return true;
+  } catch(e) {}
+  return false;
+}
+
+// Save whenever the app goes to the background, or anything important changes
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveSession();
+});
+window.addEventListener('pagehide', saveSession);
+window.addEventListener('beforeunload', saveSession);
 
 // ── SEND ──────────────────────────────────────────────────────────────────────
 async function sendMessage(silent){
@@ -3123,6 +3191,8 @@ loadProfile();
 renderSavedTrips();
 renderResumeTrip();
 renderVehiclePrompt();
+// Coming back after switching apps? Pick up exactly where we left off.
+restoreSession();
 setInterval(fetchWeather,600000);
 checkVersion();
 setInterval(checkVersion, 900000);
