@@ -288,7 +288,7 @@
 <!-- START OVERLAY -->
 <div class="start-overlay hidden" id="startOverlay">
   <div class="start-logo">🧭</div>
-  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 13 Jul 2026, 02:00 PM AEST</div>
+  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 13 Jul 2026, 02:30 PM AEST</div>
   <div class="start-title" id="startTitle">Welcome to <span>Navigator</span></div>
   <div class="start-sub">Your AI co-pilot for the road. Tap the mic and just tell me.</div>
   <div id="vehiclePrompt" style="margin:0 0 14px;"></div>
@@ -2138,7 +2138,7 @@ RULES:
 - Every word must carry information: a name, a number, a fact, or the navigation line. Nothing else.
 - BANNED: apologies, hedging, "I'd suggest", "you might want to", "it's worth noting", restating the question, describing what you can't do.
 - OFF THE MAPPED ROAD: If the context says the driver is off the mapped road network, tell them clearly and early — something like "you're a fair way off the mapped roads here, so these times are rough." Still give them the options, but say the distances are approximate, and suggest asking again once they're back on a proper road for accurate figures. Do not pretend the numbers are precise.
-- TOILETS: A practical, common need — treat it matter-of-factly, no coyness. Give the nearest with its distance. In Solo mode, prefer staffed or well-lit locations (servos, shopping centres, cafés) over isolated roadside stops, and say why briefly if it means a slightly longer drive.
+- TOILETS: A practical, urgent need — treat it matter-of-factly, no coyness. The list includes public toilets AND servos, cafés and pubs (all of which have toilets and are far better mapped). Give the NEAREST one, whatever kind it is — nobody cares whether it's a park or a servo when they need to go. Say what it is ("the servo at X, 4 minutes"). In Solo mode, prefer staffed or well-lit places over isolated spots.
 - ANSWER THE QUESTION ASKED. If the driver asks for food, do not tell them about toilets. If a lookup failed, say so — do NOT substitute a different category you happen to have information about.
 - NEVER mention your context, lists, data, sources, or tools. Don't narrate what you can see — banned phrases: "on the map", "on your map", "already on your map", "your list", "in your list", "my data", "the data shows". BUT you MAY say "the others are pinned — tap any one to go there" when you've named fewer options than are showing. That's helping the driver, not narrating.
 - NEVER invent a place, a distance, or a travel time. If the context doesn't give you one, you don't have one.
@@ -2646,7 +2646,7 @@ const POI_TRIGGERS = [
   { re: /bakery|bakeries|\bpies?\b|bread|pastry/i, kind: 'bakery', label: 'BAKERIES' },
   { re: /doctors?|hospitals?|medical|clinics?|\bgp\b/i, kind: 'medical', label: 'MEDICAL' },
   { re: /laundr|washing machine|wash(ing)? clothes/i, kind: 'laundry', label: 'LAUNDRIES' },
-  { re: /toilets?|\bloos?\b|restrooms?|dunny|\bwee\b|bathroom/i, kind: 'toilets', label: 'PUBLIC TOILETS' },
+  { re: /toilets?|\bloos?\b|restrooms?|dunny|\bwee\b|bathroom/i, kind: 'toilets', label: 'PLACES WITH TOILETS' },
   { re: /\batms?\b|\bbanks?\b|cash out|cash ?point|withdraw/i, kind: 'atm', label: 'ATMS & BANKS' },
   { re: /mechanics?|tyres?|car repair|service the car|breakdown/i, kind: 'mechanic', label: 'MECHANICS' },
   // FOOD — the big one. Anything about eating lands here.
@@ -2672,14 +2672,17 @@ async function fetchPoi(kind, label) {
         .map(s => ({ name: s.name, lat: +s.lat, lon: +s.lon, crow: distKm(gps.lat, gps.lon, s.lat, s.lon) }))
         .sort((a,b) => a.crow - b.crow);
 
-      // Spread: take the nearest, then anything >3km from everything already taken.
-      // This guarantees different towns get a seat at the table.
+      // Urgent needs (toilets) want the NEAREST, full stop — not a choice of directions.
+      // Everything else benefits from options in different directions.
+      const urgent = (kind === 'toilets' || kind === 'medical');
+
       const spread = [];
       for (const c of all) {
         if (spread.length >= 10) break;
+        if (urgent) { spread.push(c); continue; }         // nearest first, no spreading
         if (!spread.length) { spread.push(c); continue; }
         const isNew = spread.every(p => distKm(c.lat, c.lon, p.lat, p.lon) > 3);
-        if (isNew || spread.length < 4) spread.push(c);   // keep a few close ones too
+        if (isNew || spread.length < 4) spread.push(c);
       }
       const cands = spread;
       if (!cands.length) return '';
@@ -2704,7 +2707,10 @@ async function fetchPoi(kind, label) {
         return ['north','north-east','east','south-east','south','south-west','west','north-west'][Math.round(ang/45) % 8];
       };
       const list = picks.map(s => `${s.name} (${bearing(s)}) — ${distTime(s)}`).join('; ');
-      return `NEARBY ${label} (real places, nearest first by ROAD): ${list}. Name the best TWO — and if they're in different directions, say so, because the driver may know about roadworks or traffic you don't. There are ${picks.length} options showing; if you name fewer than all of them, finish by saying the others are pinned and they can tap any one to go there.`;
+      const guide = urgent
+        ? ` This is urgent — give the NEAREST one only, say what it is and how far. No choices, no alternatives.`
+        : ` Name the best TWO — and if they're in different directions, say so, because the driver may know about roadworks or traffic you don't. There are ${picks.length} showing; if you name fewer, finish by saying the others are pinned and they can tap any one to go there.`;
+      return `NEARBY ${label} (real places, nearest first by ROAD): ${list}.${guide}`;
     }
     // Data source said "no" — could be genuinely empty, or the service is down
     if (d.unavailable || d.error) {
