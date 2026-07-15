@@ -288,25 +288,45 @@
 <!-- START OVERLAY -->
 <div class="start-overlay hidden" id="startOverlay">
   <div class="start-logo">🧭</div>
-  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 13 Jul 2026, 04:30 PM AEST</div>
+  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 13 Jul 2026, 04:45 PM AEST</div>
   <div class="start-title" id="startTitle">Welcome to <span>Navigator</span></div>
-  <div class="start-sub">Your AI co-pilot for the road. Tap the mic and just tell me.</div>
-  <div id="vehiclePrompt" style="margin:0 0 14px;"></div>
+  <div class="start-sub" style="margin-bottom:4px;">What are we doing today?</div>
+  <div id="vehiclePrompt" style="margin:0 0 10px;"></div>
 
-  <!-- BIG MIC — the primary way in -->
-  <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;">
-    <button id="startMicBtn" onclick="startVoiceStart()"
-      style="width:88px;height:88px;border-radius:50%;border:3px solid var(--amber);
-             background:rgba(245,166,35,0.12);font-size:38px;cursor:pointer;
-             display:flex;align-items:center;justify-content:center;transition:all 0.2s;
-             box-shadow:0 0 0 0 rgba(245,166,35,0.4);">🎙</button>
-    <div id="startMicStatus" style="font-size:13px;color:var(--amber);margin-top:10px;min-height:18px;font-weight:600;"></div>
-    <div id="startExamples" style="font-size:12px;color:var(--gray2);margin-top:6px;text-align:center;line-height:1.7;">
-      "We're off to Toowoomba for the day"<br>
-      "Just driving" &nbsp;·&nbsp; "Cheapest fuel near me"<br>
-      "Where's the nearest toilet?"
+  <!-- THE TWO MODES — explained plainly, not left as examples to guess from -->
+  <div style="background:var(--navy3);border-radius:12px;padding:12px 14px;margin-bottom:16px;">
+    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">
+      <span style="font-size:18px;">🗺</span>
+      <div style="font-size:13px;color:var(--gray1);line-height:1.4;">
+        <b style="color:var(--white);">Planning a journey?</b> Tell me where — I'll size up the days, overnight stops, rest breaks and safety along the way.
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:flex-start;">
+      <span style="font-size:18px;">🚗</span>
+      <div style="font-size:13px;color:var(--gray1);line-height:1.4;">
+        <b style="color:var(--white);">Just driving?</b> Ask me anything nearby — fuel, food, a toilet, whatever you need right now.
+      </div>
     </div>
   </div>
+
+  <!-- SPEAK OR TYPE — genuine equals, not primary and fallback -->
+  <div style="display:flex;gap:10px;margin-bottom:6px;">
+    <button id="startMicBtn" onclick="startVoiceStart()"
+      style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;
+             padding:16px 10px;border-radius:14px;border:2px solid var(--amber);
+             background:rgba(245,166,35,0.10);cursor:pointer;transition:all 0.2s;">
+      <span style="font-size:30px;">🎙</span>
+      <span style="font-size:13px;font-weight:700;color:var(--amber);">Tap to speak</span>
+    </button>
+    <button onclick="showWhere()"
+      style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;
+             padding:16px 10px;border-radius:14px;border:2px solid var(--amber);
+             background:rgba(245,166,35,0.10);cursor:pointer;transition:all 0.2s;">
+      <span style="font-size:30px;">⌨</span>
+      <span style="font-size:13px;font-weight:700;color:var(--amber);">Tap to type</span>
+    </button>
+  </div>
+  <div id="startMicStatus" style="font-size:13px;color:var(--amber);margin-top:2px;margin-bottom:14px;min-height:18px;font-weight:600;text-align:center;"></div>
 
   <div class="start-btns">
     <div class="start-btn quick" id="resumeBtn" style="display:none;border-color:var(--amber);" onclick="resumeTrip()">
@@ -317,23 +337,16 @@
       <div class="start-btn-title" id="clearTitle" style="color:var(--red);">✕ Clear trip</div>
       <div class="start-btn-desc">Regular runs & ⭐ stops kept</div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div class="start-btn quick" style="border-color:rgba(245,166,35,0.5);" onclick="showWhere()">
-        <div class="start-btn-title">🗺 Type it instead</div>
-        <div class="start-btn-desc">Where are you going?</div>
-      </div>
-      <div class="start-btn quick" style="border-color:rgba(245,166,35,0.5);" onclick="quickStart()">
-        <div class="start-btn-title">🚗 Just driving</div>
-        <div class="start-btn-desc">No particular destination</div>
-      </div>
-    </div>
     <div id="whereWrap" style="display:none;background:var(--navy3);border:1px solid rgba(245,166,35,0.35);border-radius:12px;padding:12px;">
       <div style="display:flex;gap:8px;align-items:center;">
-        <input class="trip-input" id="whereInput" placeholder="e.g. Cairns" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();whereTo();}">
+        <input class="trip-input" id="whereInput" placeholder="Type where you're going, or what you need" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();whereTo();}">
         <button class="trip-btn primary" style="flex:0 0 auto;padding:10px 18px;" onclick="whereTo()">Go</button>
         <button class="trip-btn secondary" style="flex:0 0 auto;padding:10px 12px;" onclick="hideWhere()" title="Cancel">✕</button>
       </div>
     </div>
+    <button class="start-btn quick" onclick="quickStart()" style="padding:11px 14px;background:none;border:1px solid rgba(255,255,255,0.12);">
+      <div class="start-btn-title" style="font-size:13px;color:var(--gray2);">Skip straight to chat</div>
+    </button>
     <div class="start-btn quick" onclick="editSetup()" style="padding:11px 14px;">
       <div class="start-btn-title" style="font-size:13px;">⚙ Edit setup</div>
       <div class="start-btn-desc">Name · vehicle · rego · van model</div>
@@ -918,7 +931,6 @@ function startVoiceStart() {
   btn.style.borderColor = '#E7202A';
   btn.style.boxShadow = '0 0 0 8px rgba(231,32,42,0.15)';
   status.textContent = '🔴 Listening — tell me what you\'re doing';
-  document.getElementById('startExamples').style.opacity = '0.35';
 
   startRec.onresult = e => {
     let full = '';
@@ -948,8 +960,6 @@ function resetStartMic() {
     btn.style.boxShadow = '0 0 0 0 rgba(245,166,35,0.4)';
   }
   if (status) status.textContent = '';
-  const ex = document.getElementById('startExamples');
-  if (ex) ex.style.opacity = '1';
   startRec = null;
 }
 
