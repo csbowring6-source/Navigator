@@ -288,7 +288,7 @@
 <!-- START OVERLAY -->
 <div class="start-overlay hidden" id="startOverlay">
   <div class="start-logo">🧭</div>
-  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 13 Jul 2026, 06:00 PM AEST</div>
+  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 13 Jul 2026, 06:20 PM AEST</div>
   <div class="start-title" id="startTitle">Welcome to <span>Navigator</span></div>
   <div class="start-sub" style="margin-bottom:4px;">What are we doing today?</div>
   <div id="vehiclePrompt" style="margin:0 0 10px;"></div>
@@ -2938,10 +2938,15 @@ function saveSession() {
   try {
     const inChat = document.getElementById('startOverlay')?.classList.contains('hidden');
     if (!inChat) { localStorage.removeItem(SESSION_KEY); return; }   // on start screen = nothing to restore
-    const chatHtml = document.getElementById('chatArea')?.innerHTML || '';
+    // Only keep the LAST FEW visible messages' HTML — a whole session's chat
+    // grows unbounded and truncating it mid-tag silently corrupts the restore
+    // after enough back-and-forth. The structured `messages` array carries the
+    // real conversation; the HTML snippet is just for a nice-looking reopen.
+    const bubbles = Array.from(document.querySelectorAll('#chatArea .msg'));
+    const recentHtml = bubbles.slice(-6).map(b => b.outerHTML).join('');
     localStorage.setItem(SESSION_KEY, JSON.stringify({
       ts: Date.now(),
-      chat: chatHtml.slice(0, 200000),      // keep it sane
+      chat: recentHtml.slice(0, 40000),     // a handful of messages is never near this
       messages: messages.slice(-12),        // recent turns only
       runDest: currentRunDest,
       tripCtx: tripContext,
@@ -3171,6 +3176,10 @@ async function sendMessage(silent){
   ].filter(Boolean).join(' ');
 
   messages.push({role:'user',content:`[Context: ${ctx}]\n\n${text}`});
+  // Keep the working conversation bounded — an unbounded array sent to the AI
+  // on every turn grows the payload every round and can degrade replies over
+  // a long back-and-forth session. Recent context is what matters at the wheel.
+  if (messages.length > 16) messages.splice(0, messages.length - 16);
   try{
     const res=await fetch(API_URL,{
       method:'POST',
