@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="app-build" content="2026-07-16T22:42:46.282705+00:00">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Navigator — AI Driving Companion</title>
 <style>
@@ -37,7 +38,7 @@
   .map-option.selected{color:var(--amber);}
 
   /* VEHICLE SELECTOR */
-  .vehicle-bar{background:var(--navy2);border-bottom:1px solid rgba(255,255,255,0.06);padding:5px 14px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
+  .vehicle-bar{display:none;background:var(--navy2);border-bottom:1px solid rgba(255,255,255,0.06);padding:5px 14px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
   .vehicle-bar::-webkit-scrollbar{display:none;}
   .v-chip{display:flex;align-items:center;gap:5px;background:var(--navy3);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--gray2);white-space:nowrap;cursor:pointer;flex-shrink:0;transition:all 0.2s;}
   .v-chip:hover{border-color:rgba(245,166,35,0.4);}
@@ -48,6 +49,14 @@
   .map-greet{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:rgba(15,31,61,0.92);border:1px solid rgba(245,166,35,0.35);border-radius:12px;padding:8px 16px;font-size:13px;color:var(--gray1);white-space:nowrap;opacity:0;transition:opacity 0.6s;pointer-events:none;box-shadow:0 4px 18px rgba(0,0,0,0.5);}
   .map-greet span{color:var(--amber);font-weight:600;}
   .map-greet.show{opacity:1;}
+  .veh-sheet{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:800;display:none;align-items:flex-end;}
+  .veh-sheet.open{display:flex;}
+  .veh-sheet-inner{width:100%;background:var(--navy2);border-radius:18px 18px 0 0;padding:16px 16px 26px;border-top:1px solid rgba(245,166,35,0.3);}
+  .veh-sheet-title{font-size:13px;color:var(--gray2);margin-bottom:12px;text-align:center;}
+  .veh-sheet-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .veh-sheet-opt{background:var(--navy3);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 4px;text-align:center;cursor:pointer;font-size:12px;color:var(--gray1);}
+  .veh-sheet-opt.active{border-color:var(--amber);color:var(--amber);background:rgba(245,166,35,0.08);}
+  .veh-sheet-opt .vi{font-size:22px;display:block;margin-bottom:4px;}
   #map{width:100%;height:100%;min-height:200px;}
   .map-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;}
   .map-placeholder-icon{font-size:28px;}
@@ -369,9 +378,10 @@
 
 <!-- CONTEXT CHIPS -->
 <div class="context-panel">
-  <div class="ctx-chip" onclick="openTripSetup()" style="border-color:rgba(245,166,35,0.4);color:var(--amber);">📋 Trip</div>
-  <div class="ctx-chip" id="soloChip" onclick="toggleChip(this)">👩 Solo driver</div>
-  <div class="ctx-chip" id="fuelTypeChip" onclick="setFuelType()">⛽ Unleaded 91</div>
+  <div class="ctx-chip" id="vehChip" onclick="openVehicleSheet()" style="border-color:rgba(245,166,35,0.4);color:var(--amber);">🚗 Car</div>
+  <div class="ctx-chip" onclick="openTripSetup()">📋 Trip</div>
+  <div class="ctx-chip" id="soloChip" onclick="toggleChip(this)">🧍 Solo</div>
+  <div class="ctx-chip" id="fuelTypeChip" onclick="setFuelType()">⛽ U91</div>
   <div class="ctx-chip" id="rangeChip" onclick="setRange()">🛣 Range: 400km</div>
   <div class="ctx-chip" id="condChip" onclick="setCond()">🌤 Conditions</div>
 </div>
@@ -397,6 +407,13 @@
       <button class="send-btn" onclick="sendMessage()" id="sendBtn">➤</button>
     </div>
     <div class="voice-status" id="voiceStatus"></div>
+  </div>
+</div>
+
+<div class="veh-sheet" id="vehSheet" onclick="this.classList.remove('open')">
+  <div class="veh-sheet-inner" onclick="event.stopPropagation()">
+    <div class="veh-sheet-title">Switch vehicle</div>
+    <div class="veh-sheet-grid" id="vehSheetGrid"></div>
   </div>
 </div>
 
@@ -696,8 +713,20 @@ let driveStart = Date.now();
 const synth = window.speechSynthesis;
 
 // ── VEHICLE SELECTOR ──────────────────────────────────────────────────────────
+function openVehicleSheet(){
+  const grid=document.getElementById('vehSheetGrid');
+  const owned=(userVehicles&&userVehicles.length)?userVehicles:Object.keys(VEHICLES);
+  grid.innerHTML=owned.map(id=>`
+    <div class="veh-sheet-opt ${id===currentVehicle?'active':''}" onclick="selectVehicle('${id}');document.getElementById('vehSheet').classList.remove('open')">
+      <span class="vi">${VEHICLES[id].icon}</span>${VEHICLES[id].label}
+    </div>`).join('');
+  document.getElementById('vehSheet').classList.add('open');
+}
+
 function selectVehicle(id) {
   currentVehicle = id;
+  const vc=document.getElementById('vehChip');
+  if(vc) vc.textContent=`${VEHICLES[id].icon} ${VEHICLES[id].label}`;
   document.querySelectorAll('.v-chip').forEach(c => c.classList.remove('active'));
   document.getElementById('v-'+id).classList.add('active');
   // Update range chip
@@ -707,7 +736,7 @@ function selectVehicle(id) {
   // Only reset if current fuel not available for new vehicle
   if (!fuels.includes(selectedFuel)) {
     selectedFuel = fuels[0];
-    document.getElementById('fuelTypeChip').textContent = `⛽ ${selectedFuel}`;
+    document.getElementById('fuelTypeChip').textContent = fuelChip();
   }
   // Truck always gets diesel
   if (id === 'truck') {
@@ -955,6 +984,10 @@ function openInMap(app) {
 
 // ── CONTEXT CHIPS ─────────────────────────────────────────────────────────────
 function toggleChip(el) { el.classList.toggle('active'); }
+// Chip display abbreviations only — full names used internally and for the AI
+const FUEL_ABBR = {'Unleaded 91':'U91','Premium 95':'P95','Premium 98':'P98','Diesel':'Diesel','E10':'E10'};
+function fuelChip(){ return `⛽ ${FUEL_ABBR[selectedFuel]||selectedFuel}`; }
+
 function setFuelType() {
   const types = FUEL_TYPES[currentVehicle] || FUEL_TYPES.car;
   const options = types.map((t,i) => `${i+1}. ${t}`).join('\n');
@@ -963,7 +996,7 @@ function setFuelType() {
     const index = parseInt(choice) - 1;
     if (types[index]) {
       selectedFuel = types[index];
-      document.getElementById('fuelTypeChip').textContent = `⛽ ${selectedFuel}`;
+      document.getElementById('fuelTypeChip').textContent = fuelChip();
     }
   }
 }
@@ -1192,20 +1225,31 @@ loadProfile();
 setInterval(fetchWeather,600000);
 </script>
 <script>
-fetch('https://api.github.com/repos/csbowring6-source/Navigator2/commits/main')
-  .then(r=>r.json())
-  .then(d=>{
-    const dt=new Date(d.commit.committer.date);
-    document.getElementById('buildStamp').textContent='v '+dt.toLocaleString('en-AU',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Australia/Brisbane'})+' AEST';
-  }).catch(()=>{});
-</script>
-<script>
 window.addEventListener('load',()=>{
   const g=document.getElementById('mapGreet');
-  if(!g)return;
-  setTimeout(()=>g.classList.add('show'),6000);
-  setTimeout(()=>g.classList.remove('show'),11000);
-  setTimeout(()=>g.remove(),11800);
+  if(g){
+    setTimeout(()=>g.classList.add('show'),6000);
+    setTimeout(()=>g.classList.remove('show'),11000);
+    setTimeout(()=>g.remove(),11800);
+  }
+  // Build stamp shows the version THIS page is actually running (embedded at build time)
+  const built=new Date(document.querySelector('meta[name="app-build"]').content);
+  const fmt=d=>'v '+d.toLocaleString('en-AU',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Australia/Brisbane'})+' AEST';
+  const bs=document.getElementById('buildStamp');
+  if(bs) bs.textContent=fmt(built);
+  // Staleness check: if GitHub has a much newer commit, offer a one-tap update
+  fetch('https://api.github.com/repos/csbowring6-source/Navigator2/commits/main')
+    .then(r=>r.json())
+    .then(d=>{
+      const pushed=new Date(d.commit.committer.date);
+      if(pushed - built > 45*60*1000){
+        const p=document.createElement('div');
+        p.textContent='⬆ New version — tap to update';
+        p.style.cssText='position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:900;background:var(--amber);color:#0A1628;font-weight:600;font-size:13px;padding:9px 18px;border-radius:20px;box-shadow:0 4px 18px rgba(0,0,0,0.5);cursor:pointer;';
+        p.onclick=()=>{location.href=location.pathname+'?u='+Date.now();};
+        document.body.appendChild(p);
+      }
+    }).catch(()=>{});
 });
 </script>
 </body>
