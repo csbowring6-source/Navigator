@@ -13,7 +13,7 @@
     --green:#2ECC71;--red:#E74C3C;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  html,body{height:100%;overflow:hidden;}
+  html,body{height:100%;height:100dvh;overflow:hidden;}
   body{background:var(--navy);color:var(--white);font-family:'Inter',sans-serif;display:flex;flex-direction:column;}
 
   /* HEADER */
@@ -37,14 +37,17 @@
   .map-option.selected{color:var(--amber);}
 
   /* VEHICLE SELECTOR */
-  .vehicle-bar{background:var(--navy2);border-bottom:1px solid rgba(255,255,255,0.06);padding:8px 14px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
+  .vehicle-bar{background:var(--navy2);border-bottom:1px solid rgba(255,255,255,0.06);padding:5px 14px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
   .vehicle-bar::-webkit-scrollbar{display:none;}
   .v-chip{display:flex;align-items:center;gap:5px;background:var(--navy3);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--gray2);white-space:nowrap;cursor:pointer;flex-shrink:0;transition:all 0.2s;}
   .v-chip:hover{border-color:rgba(245,166,35,0.4);}
   .v-chip.active{border-color:var(--amber);color:var(--amber);background:rgba(245,166,35,0.08);}
 
   /* MAP */
-  .map-wrap{position:relative;flex:0 0 35vh;overflow:hidden;background:var(--navy3);}
+  .map-wrap{position:relative;flex:1 1 auto;min-height:180px;overflow:hidden;background:var(--navy3);}
+  .map-greet{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:rgba(15,31,61,0.92);border:1px solid rgba(245,166,35,0.35);border-radius:12px;padding:8px 16px;font-size:13px;color:var(--gray1);white-space:nowrap;opacity:0;transition:opacity 0.6s;pointer-events:none;box-shadow:0 4px 18px rgba(0,0,0,0.5);}
+  .map-greet span{color:var(--amber);font-weight:600;}
+  .map-greet.show{opacity:1;}
   #map{width:100%;height:100%;min-height:200px;}
   .map-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;}
   .map-placeholder-icon{font-size:28px;}
@@ -59,17 +62,17 @@
   .alert-chip.fatigue{border-color:rgba(46,204,113,0.3);color:var(--green);}
 
   /* CONTEXT CHIPS */
-  .context-panel{background:var(--navy2);border-bottom:1px solid rgba(255,255,255,0.06);padding:7px 14px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
+  .context-panel{background:var(--navy2);border-bottom:1px solid rgba(255,255,255,0.06);padding:5px 14px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
   .context-panel::-webkit-scrollbar{display:none;}
   .ctx-chip{display:flex;align-items:center;gap:4px;background:var(--navy3);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--gray2);white-space:nowrap;cursor:pointer;flex-shrink:0;transition:all 0.2s;}
   .ctx-chip.active{border-color:var(--amber);color:var(--amber);}
 
   /* BOTTOM */
-  .bottom-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;}
-  .chat-area{flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:10px;}
+  .bottom-panel{flex:0 0 auto;display:flex;flex-direction:column;overflow:hidden;max-height:45vh;max-height:45dvh;}
+  .chat-area{flex:0 1 auto;overflow-y:auto;padding:6px 12px;display:flex;flex-direction:column;gap:8px;}
 
   /* WELCOME */
-  .welcome{padding:8px 0;max-width:500px;margin:0 auto;width:100%;}
+  .welcome{padding:0;max-width:500px;margin:0 auto;width:100%;}
   .welcome-top{text-align:center;margin-bottom:10px;}
   .welcome-icon{font-size:28px;margin-bottom:4px;}
   .welcome h1{font-size:17px;font-weight:600;margin-bottom:3px;}
@@ -77,7 +80,7 @@
   .welcome p{font-size:11px;color:var(--gray2);line-height:1.5;}
 
   /* 2x2 SUGGESTION GRID */
-  .suggestion-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+  .suggestion-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:0;}
   .suggestion{background:var(--navy2);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 10px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;}
   .suggestion:hover,.suggestion:active{border-color:var(--amber);background:rgba(245,166,35,0.06);}
   .sug-icon{font-size:20px;}
@@ -130,7 +133,7 @@
   .send-btn{width:36px;height:36px;border-radius:9px;background:var(--amber);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--navy);font-size:15px;flex-shrink:0;}
   .send-btn:disabled{background:var(--gray3);cursor:not-allowed;}
   .wake-bar{margin-bottom:8px;}
-  .wake-word-btn{width:100%;padding:9px;border-radius:10px;background:var(--navy3);border:1px solid rgba(255,255,255,0.1);color:var(--gray2);font-family:"Inter",sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s;text-align:center;}
+  .wake-word-btn{width:100%;padding:7px;border-radius:10px;background:var(--navy3);border:1px solid rgba(255,255,255,0.1);color:var(--gray2);font-family:"Inter",sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s;text-align:center;}
   .wake-word-btn:hover{border-color:rgba(245,166,35,0.4);color:var(--gray1);}
   .wake-word-btn.active{background:rgba(231,76,60,0.15);border-color:var(--red);color:var(--red);animation:wakePulse 2s infinite;}
   @keyframes wakePulse{0%,100%{border-color:var(--red);}50%{border-color:rgba(231,76,60,0.3);}}
@@ -347,6 +350,7 @@
 
 <!-- MAP -->
 <div class="map-wrap">
+  <div class="map-greet" id="mapGreet">🧭 G'day. Your <span>co-pilot</span> is ready.</div>
   <div id="map">
     <div class="map-placeholder" id="mapPlaceholder">
       <div class="map-placeholder-icon">🗺</div>
@@ -372,11 +376,6 @@
 <div class="bottom-panel">
   <div class="chat-area" id="chatArea">
     <div class="welcome" id="welcome">
-      <div class="welcome-top">
-        <div class="welcome-icon">🧭</div>
-        <h1 id="welcomeHeading">G'day.<br>Your <span>co-pilot</span> is ready.</h1>
-        <p>Select your vehicle above — then tap mic or a suggestion.</p>
-      </div>
       <div class="suggestion-grid" id="suggestionGrid">
         <!-- Populated by JS based on vehicle -->
       </div>
@@ -542,8 +541,8 @@ function saveProfile() {
 function applyProfile() {
   // Personalise greetings
   document.getElementById('startTitle').innerHTML = `Welcome back, <span>${userName}</span>`;
-  const wh = document.getElementById('welcomeHeading');
-  if (wh) wh.innerHTML = `G'day ${userName}.<br>Your <span>co-pilot</span> is ready.`;
+  const wh = document.getElementById('mapGreet');
+  if (wh) wh.innerHTML = `🧭 G'day ${userName}. Your <span>co-pilot</span> is ready.`;
 
   // Filter vehicle bar to only show owned vehicles
   const bar = document.getElementById('vehicleBar');
@@ -1180,6 +1179,15 @@ fetch('https://api.github.com/repos/csbowring6-source/Navigator2/commits/main')
     const dt=new Date(d.commit.committer.date);
     document.getElementById('buildStamp').textContent='v '+dt.toLocaleString('en-AU',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Australia/Brisbane'})+' AEST';
   }).catch(()=>{});
+</script>
+<script>
+window.addEventListener('load',()=>{
+  const g=document.getElementById('mapGreet');
+  if(!g)return;
+  setTimeout(()=>g.classList.add('show'),400);
+  setTimeout(()=>g.classList.remove('show'),4900);
+  setTimeout(()=>g.remove(),5700);
+});
 </script>
 </body>
 </html>
