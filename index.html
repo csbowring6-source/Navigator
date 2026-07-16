@@ -321,7 +321,7 @@
     <div><div class="logo-text">Navigator</div></div>
   </div>
   <div class="header-right">
-    <div class="build-stamp" id="buildStamp" title="Last updated">v 03 Jul 2026, 07:30 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">v …</div>
     <div class="map-picker" id="mapPicker">
       <button class="map-btn" onclick="toggleMapMenu()">
         <span id="mapIcon">🗺</span> <span id="mapLabel">Apple Maps</span> ▾
@@ -439,9 +439,7 @@
 </div>
 
 <script>
-const ANTHROPIC_KEY = "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";
-const GMAPS_KEY     = "AIzaSyCaH2RSV31clT9JlzfHODlgtmfGdBLmAUI";
-const WEATHER_KEY   = "5e1f7a4226943fdbe8872d2b7423d38b";
+const WORKER_URL = "https://delicate-credit-a17e.csbowring6.workers.dev";
 
 // ── VEHICLE PROFILES ──────────────────────────────────────────────────────────
 // Fuel types available per vehicle
@@ -847,7 +845,7 @@ window.initMap = function() {}; // no-op kept for compatibility
 async function fetchWeather() {
   if (!gps) return;
   try {
-    const r = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${gps.lat}&lon=${gps.lon}&appid=${WEATHER_KEY}&units=metric`);
+    const r = await fetch(`${WORKER_URL}/weather?lat=${gps.lat}&lon=${gps.lon}`);
     const d = await r.json();
     const wspd = Math.round((d.wind?.speed||0)*3.6);
     const wdir = ['N','NE','E','SE','S','SW','W','NW'][Math.round((d.wind?.deg||0)/45)%8];
@@ -1149,9 +1147,9 @@ async function sendMessage(){
   showTyping();
 
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
+    const res=await fetch(WORKER_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:120,system:SYSTEM,messages})
     });
     const data=await res.json();
@@ -1174,6 +1172,14 @@ updateSuggestions();
 loadMapPreference();
 loadProfile();
 setInterval(fetchWeather,600000);
+</script>
+<script>
+fetch('https://api.github.com/repos/csbowring6-source/Navigator2/commits/main')
+  .then(r=>r.json())
+  .then(d=>{
+    const dt=new Date(d.commit.committer.date);
+    document.getElementById('buildStamp').textContent='v '+dt.toLocaleString('en-AU',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Australia/Brisbane'})+' AEST';
+  }).catch(()=>{});
 </script>
 </body>
 </html>
