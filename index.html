@@ -295,7 +295,7 @@
 <!-- START OVERLAY -->
 <div class="start-overlay hidden" id="startOverlay">
   <div class="start-logo">🧭</div>
-  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 17 Jul 2026, 11:35 AM AEST</div>
+  <div class="build-stamp" id="buildStamp" title="Last updated" style="text-align:center;max-width:none;margin-bottom:10px;">✓ v 17 Jul 2026, 12:05 PM AEST</div>
   <div class="start-title" id="startTitle">Welcome to <span>Navigator</span></div>
   <div class="start-sub" style="margin-bottom:4px;">What are we doing today?</div>
   <div id="vehiclePrompt" style="margin:0 0 10px;"></div>
@@ -939,6 +939,7 @@ function loadProfile() {
       // The greeting becomes a brief popup over the map instead.
       document.getElementById('startOverlay').classList.add('hidden');
       showMapGreeting();
+      markAppStarted();   // Back must not resurrect the welcome screen from here
     } else {
       // First time ever — show profile setup
       document.getElementById('profileOverlay').classList.remove('hidden');
@@ -1173,6 +1174,7 @@ function pickTodaysVehicle(k) {
 // ── START OVERLAY / TRIP SETUP ────────────────────────────────────────────────
 function quickStart() {
   stopStartMic(); document.getElementById('startOverlay').classList.add('hidden');
+  markAppStarted();
   // Restore safety-relevant trip context only — fuel is handled by the fuel tile and chips
   try {
     const lastTrip = localStorage.getItem('navigator_last_trip');
@@ -3048,6 +3050,11 @@ function restoreSession() {
       }
     }
     document.getElementById('startOverlay').classList.add('hidden');
+    // A restored session means the app has been used — never leave the setup
+    // overlay up over it (covers the case where the profile was evicted but the
+    // session survived), and guard Back from here on.
+    document.getElementById('profileOverlay').classList.add('hidden');
+    markAppStarted();
     updateSuggestions();
     // Redraw the route and pins once the map is genuinely ready — not a guessed
     // delay, which silently failed if the map hadn't finished initialising.
@@ -3246,19 +3253,45 @@ async function sendMessage(silent){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,system:SYSTEM,messages})
     });
-    const data=await res.json();
+    let data=null;
+    try { data = await res.json(); } catch(_) { /* non-JSON body */ }
     hideTyping();
-    const reply=data.content?.[0]?.text||'Something went wrong — try again.';
-    messages.push({role:'assistant',content:reply});
-    addMsg('nav',reply);
-    speak(reply);
-    // Pin the options we offered onto the map — pictorial reference at a glance
-    if (window._pendingPins && window._pendingPins.length) {
-      showOptionPins(window._pendingPins);
+    // Surface WHAT actually failed rather than a blanket "something went wrong".
+    // The relay passes Anthropic's error shape straight through: {error:{type,message}}.
+    if (!res.ok || (data && data.error)) {
+      const apiErr = data && data.error ? data.error : null;
+      let msg;
+      if (apiErr && /authentication|permission/i.test(apiErr.type || '')) {
+        msg = `The AI service rejected the request (${apiErr.type}) — its API key needs updating on the server. This isn't your phone or connection.`;
+      } else if (apiErr && apiErr.message) {
+        msg = `AI service error: ${apiErr.message}`;
+      } else {
+        msg = `The AI service returned an error (HTTP ${res.status || '?'}). Try again shortly.`;
+      }
+      console.error('AI request failed:', res.status, data);
+      messages.pop();   // drop the unanswered turn so a retry stays clean
+      addMsg('nav', msg);
+    } else {
+      const reply = data && data.content && data.content[0] && data.content[0].text;
+      if (reply) {
+        messages.push({role:'assistant',content:reply});
+        addMsg('nav',reply);
+        speak(reply);
+        // Pin the options we offered onto the map — pictorial reference at a glance
+        if (window._pendingPins && window._pendingPins.length) {
+          showOptionPins(window._pendingPins);
+        }
+      } else {
+        console.error('AI response had no text content:', data);
+        messages.pop();
+        addMsg('nav','The AI sent back an empty reply — try again, or reword it.');
+      }
     }
   }catch(e){
     hideTyping();
-    addMsg('nav','Connection issue — check your internet and try again.');
+    console.error('AI request threw:', e);
+    messages.pop();
+    addMsg('nav',`Connection issue — ${e.message || 'the request could not be sent'}. Check your internet and try again.`);
   }
   busy=false; document.getElementById('sendBtn').disabled=false;
 }
@@ -3299,6 +3332,25 @@ function showUpdateBanner(){
   };
   document.body.appendChild(b);
 }
+
+// ── BACK-BUTTON GUARD ─────────────────────────────────────────────────────────
+// Once the app has started (the map is showing), the browser Back button must
+// never resurrect the welcome or setup screen. We push one history entry the
+// first time the app reaches the map; on a Back press we re-assert that both
+// overlays stay hidden, so Back keeps the driver on the map instead of dropping
+// them onto a start screen. (Requires only a saved profile OR a restored
+// session to count as "started".)
+let _appStarted = false;
+function markAppStarted() {
+  if (_appStarted) return;
+  _appStarted = true;
+  try { history.pushState({ nav: 'app-map' }, ''); } catch(e) {}
+}
+window.addEventListener('popstate', () => {
+  if (!_appStarted) return;
+  document.getElementById('startOverlay')?.classList.add('hidden');
+  document.getElementById('profileOverlay')?.classList.add('hidden');
+});
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 if(synth) synth.onvoiceschanged=()=>synth.getVoices();
