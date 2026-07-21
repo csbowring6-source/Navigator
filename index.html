@@ -564,7 +564,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 02:25 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 03:26 AM AEST</div>
   </div>
 </div>
 
@@ -2138,10 +2138,32 @@ function toggleVoice() {
   else startListening();
 }
 
-// Everything committed so far, plus the live interim tail (shown, not committed).
+// Everything committed so far, plus this instance's final and the live interim
+// tail — MERGED, not concatenated. Android re-delivers audio across instances,
+// so raw concatenation duplicates words both on screen and in what gets sent.
 function capturedText() {
-  return (committedFinal + ' ' + instanceFinal + ' ' + interimText).replace(/\s+/g,' ').trim();
+  return mergeFinal(mergeFinal(committedFinal, instanceFinal), interimText);
 }
+// Merge a newly-finalised chunk into the committed transcript without ever
+// repeating words. Android hands the same audio to more than one recogniser
+// instance, so a chunk may be a full re-hear (drop it) or overlap the tail of
+// what we already have (stitch at the seam) — plain appending is what produced
+// the repeated-fragment salad.
+function mergeFinal(committed, addition) {
+  const a = (committed || '').trim(), b = (addition || '').trim();
+  if (!b) return a;
+  if (!a) return b;
+  const al = a.toLowerCase(), bl = b.toLowerCase();
+  if (al.includes(bl)) return a;                 // already have it — a re-hear
+  const max = Math.min(al.length, bl.length);
+  for (let n = max; n > 3; n--) {                // longest tail/head overlap wins
+    if (al.slice(-n) === bl.slice(0, n)) {
+      return (a + b.slice(n)).replace(/\s+/g,' ').trim();
+    }
+  }
+  return (a + ' ' + b).replace(/\s+/g,' ').trim();
+}
+
 function showCaptured(text) {
   const ui = document.getElementById('userInput');
   if (ui) { ui.value = text; try { autoResize(ui); } catch(e) {} }
@@ -2187,6 +2209,15 @@ function startListening() {
 }
 
 function startRecogniser() {
+  // Cut the previous instance loose first. A zombie recogniser still wired to
+  // onresult would feed the same audio in alongside the new one — another way
+  // to duplicate words.
+  if (recognition) {
+    try {
+      recognition.onend = null; recognition.onresult = null; recognition.onerror = null;
+      if (recognition.abort) recognition.abort(); else recognition.stop();
+    } catch(e) {}
+  }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SR();
   recognition.lang = 'en-AU';
@@ -2222,13 +2253,13 @@ function startRecogniser() {
   };
 
   recognition.onend = () => {
-    // Carry forward FINALS ONLY. The interim tail is deliberately dropped: the
-    // next recogniser may re-hear that audio, and committing it here is what
-    // produced repeated fragments. Idempotent, so a double onend can't double it.
-    const done = instanceFinal;
-    if (done && !committedFinal.endsWith(done)) {
-      committedFinal = (committedFinal + ' ' + done).replace(/\s+/g,' ').trim();
-    }
+    // Carry forward FINALS ONLY, merged overlap-aware. Android restarts often
+    // re-deliver audio the previous instance already finalised, so a plain
+    // append (or an endsWith guard, which only catches an immediate repeat)
+    // rebuilds the word salad: "right so I'm in Cairns I'm gonna right so I'm
+    // in Cairns". mergeFinal drops a re-heard chunk and stitches a partial
+    // overlap instead of duplicating it.
+    committedFinal = mergeFinal(committedFinal, instanceFinal);
     instanceFinal = ''; interimText = '';
     if (!captureActive) return;        // a deliberate stop — stopCapture sends
     // Android ended us early but the driver isn't finished: start another.
@@ -2472,10 +2503,6 @@ EXAMPLE of a perfect reply:
 RULES:
 - 30 words maximum across the whole reply. Hard limit — with TWO exceptions: TRIP LEG PLANNING below, and offering a genuine CHOICE of two options in different directions (up to 40 words, because the choice is worth the words).
 - TRIP LEG PLANNING (the only exception to the word cap): when the driver asks how long the trip will take, to plan their days or legs, or where to break and sleep along the way — use the ROUTE DATA in context and reply in this compact shape, 80 words maximum, plain sentences: First, total km and realistic driving hours for THIS vehicle (car = route hours plus 10% for stops; caravan or campervan = route hours plus 30%; truck = plus 20% with mandatory rest breaks). Then one line per driving day: "Day 1: [start] to [overnight town] — break at [real town about 4 hours in], overnight at [real town about 8 hours in]." Pick towns by driving time on the actual route, and prefer overnight towns with caravan parks and motels. Finish by offering to navigate the first leg. Solo mode rules apply to every stop named. If no ROUTE DATA is in context, say you need a trip planned first — never guess distances.
-- RULE OF THREE (place results — camps, parks, servos, stops): when the context lists real places, give ONE best fit plus up to TWO alternatives, then STOP. Up to 45 words for these (this overrides the 30-word cap). Shape: "Best fit: [name], [drive time] ahead — [amenities]. Also: [name], [time], [key fact]; or [name], [time], [key fact]. Want more, or shall I line one up?" Rank exactly as the context ordered them: fit, then detour cost, then value. NEVER pad to reach three — two good options beat three with a filler.
-- EMPTY WINDOW: if the context says nothing sits inside the asked-for window, say that plainly FIRST ("nothing in the next hour"), then offer the nearest beyond it as a widened search. Never quietly stretch the window and present it as if it fitted.
-- UNCONFIRMED DATA: when the context marks a field UNCONFIRMED, pass that on in the driver's words — "power unconfirmed, worth a call" — rather than dropping it or asserting it. A blank field is NOT a no. Where rig access, drive-through or unhitching matters and the data can't settle it, say it's community knowledge worth checking, never guess.
-- ALONG MY ROUTE WITH NO TRIP SET: never reply that you have no route plan. If the driver asks for something ahead or along their route and no trip is set, ask "Want me to plan that?" — naming the destination if they've given one — and answer with what's nearby in the meantime.
 - CLARITY CHECK: If the request is rambling, ambiguous, or could mean two different things, do NOT guess — reply with ONE short confirmation of what you understood, 12 words maximum, ending in a question (e.g. "Powered site tonight, van-accessible, near Gympie — right?"). When the driver confirms, answer in the standard format. If the request is clear, NEVER add a confirmation step — answer immediately. Most requests are clear.
 - Every word must carry information: a name, a number, a fact, or the navigation line. Nothing else.
 - BANNED: apologies, hedging, "I'd suggest", "you might want to", "it's worth noting", restating the question, describing what you can't do.
@@ -2810,117 +2837,32 @@ function distKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// Amenity wording that never overstates: OSM leaves tags blank far more often
-// than it says "no", and a blank is NOT a "no" (SPEC §5 — flag, don't guess).
-function campAmenities(s) {
-  const known = [], unknown = [];
-  const tag = (v, yes, name) => {
-    if (v === 'yes') known.push(yes);
-    else if (v === 'no') return;              // genuinely absent — just don't claim it
-    else unknown.push(name);                  // blank/missing = unconfirmed
-  };
-  tag(s.powered, 'powered', 'power');
-  tag(s.toilets, 'toilets', 'toilets');
-  tag(s.water,   'water',   'water');
-  tag(s.dump,    'dump point', 'dump point');
-  return { known, unknown };
-}
-
-// SPEC §2 benchmark: campsites ahead along the route, inside a drive-time
-// window, free/paid honoured, rig fit considered, amenities spoken, and every
-// unconfirmed field flagged rather than glossed.
-async function fetchCamps(opts) {
+async function fetchCamps() {
   if (!gps) return '';
-  opts = opts || {};
-  const windowMins = opts.windowMins || 60;     // "within the next hour" default (§5)
-  const wantFree   = opts.wantFree;             // true = free only, undefined = either
   try {
-    const onTrip = !!(currentRunDest && window._tripRoute && window._tripRoute.path && window._tripRoute.path.length > 2);
-    // On a trip the corridor runs past a 40km bubble — search wider.
-    const radius = onTrip ? 90 : 40;
-    const r = await fetch(`${API_URL}camps?lat=${gps.lat}&lon=${gps.lon}&radius=${radius}`);
+    const r = await fetch(`${API_URL}camps?lat=${gps.lat}&lon=${gps.lon}&radius=40`);
     const d = await r.json();
-    if (!d.results || !d.results.length) {
-      return `NO CAMPS FOUND within ${radius}km. Say plainly that nothing is showing in the data out here and offer to widen the search — do not invent sites.`;
-    }
-    let all = d.results.filter(s => s.lat && s.lon)
-      .map(s => ({ ...s, lat: +s.lat, lon: +s.lon, crow: distKm(gps.lat, gps.lon, s.lat, s.lon) }));
-
-    // ── DIRECTION OF TRAVEL — ahead only, never behind (SPEC §2) ──────────────
-    let corridorNote = ' (no trip set, so these are simply nearest by road — not filtered to a direction of travel)';
-    if (onTrip) {
-      const path = window._tripRoute.path;
-      const myProg = progressAlongRoute(gps.lat, gps.lon, path);
-      all.forEach(s => {
-        s.prog   = progressAlongRoute(s.lat, s.lon, path);
-        s.detour = distToRoute(s.lat, s.lon, path);
+    if (d.results && d.results.length) {
+      const cands = d.results
+        .filter(s => s.lat && s.lon)
+        .map(s => ({ ...s, lat: +s.lat, lon: +s.lon, crow: distKm(gps.lat, gps.lon, s.lat, s.lon) }))
+        .sort((a,b) => a.crow - b.crow)
+        .slice(0, 6);
+      if (!cands.length) return '';
+      const roads = await roadDistances(gps.lat, gps.lon, cands);
+      cands.forEach((c,i) => {
+        c.km   = (roads[i] && roads[i].km != null) ? roads[i].km : c.crow;
+        c.mins = roads[i] ? roads[i].mins : null;
       });
-      const ahead = all.filter(s => s.prog > myProg + 0.004 && s.detour <= 15);
-      if (ahead.length) {
-        all = ahead;
-        corridorNote = ` AHEAD on the ${currentRunDest} route only — anything behind the driver has already been excluded`;
-      } else {
-        return `NOTHING AHEAD: no camps found ahead on the ${currentRunDest} route within ${radius}km. Say so plainly and offer to widen the search or look further along — never offer sites behind the driver, and never pad the answer.`;
-      }
+      cands.sort((a,b) => a.km - b.km);
+      notePlaces(cands.map(s => s.name));
+      addPendingPins(cands.map(s => ({ name: s.name, price: null, km: s.km, mins: s.mins, lat: s.lat, lon: s.lon })));
+      const list = cands.map(s => {
+        const bits = [s.type, s.fee==='no'?'free':'', s.powered&&s.powered!=='no'?'powered':'', s.dump==='yes'?'dump point':''].filter(Boolean).join(', ');
+        return `${s.name} — ${distTime(s)} (${bits})`;
+      }).join('; ');
+      return `NEARBY CAMPS/PARKS (real sites, nearest first by ROAD, all pinned on the driver's map; tag data may be incomplete): ${list}.`;
     }
-
-    // ── FREE / PAID honoured when stated ─────────────────────────────────────
-    if (wantFree === true) {
-      const free = all.filter(s => s.fee === 'no');
-      if (free.length) all = free;
-      else return `NO FREE CAMPS ahead inside the window — say that plainly, then offer the paid options or a wider search rather than pretending a paid site is free.`;
-    }
-
-    // ── DRIVE TIME, not straight-line (SPEC §2) ──────────────────────────────
-    const cands = all.sort((a,b) => a.crow - b.crow).slice(0, 10);
-    const roads = await roadDistances(gps.lat, gps.lon, cands);
-    cands.forEach((c,i) => {
-      c.km   = (roads[i] && roads[i].km != null) ? roads[i].km : c.crow;
-      c.mins = roads[i] ? roads[i].mins : null;
-    });
-
-    // Inside the stated window; if empty, widen and SAY so — never pad (§5)
-    let inWindow = cands.filter(c => c.mins != null && c.mins <= windowMins);
-    let widened = '';
-    if (!inWindow.length) {
-      inWindow = cands.slice().sort((a,b) => (a.mins ?? 999) - (b.mins ?? 999)).slice(0, 3);
-      widened = ` NOTHING sits inside the ${windowMins}-minute window — tell the driver that plainly first, then offer these as the nearest beyond it.`;
-    }
-
-    // Rank: fit → detour cost → value (§5). Paid-but-powered beats a blank site.
-    inWindow.sort((a,b) => {
-      const det = (a.detour ?? 0) - (b.detour ?? 0);
-      if (Math.abs(det) > 3) return det;                 // meaningfully less detour wins
-      return (a.mins ?? 999) - (b.mins ?? 999);
-    });
-    const picks = inWindow.slice(0, 5);
-
-    notePlaces(picks.map(s => s.name));
-    addPendingPins(picks.map(s => ({ name: s.name, price: null, km: s.km, mins: s.mins, lat: s.lat, lon: s.lon })));
-    // Structured list for the results view (name, distance, amenities, price)
-    window._lastResults = picks.map(s => {
-      const am = campAmenities(s);
-      return { name: s.name, type: s.type, km: s.km, mins: s.mins, lat: s.lat, lon: s.lon,
-               free: s.fee === 'no', paid: s.fee === 'yes',
-               amenities: am.known, unconfirmed: am.unknown, kind: 'camp' };
-    });
-
-    const list = picks.map(s => {
-      const am = campAmenities(s);
-      const price = s.fee === 'no' ? 'FREE' : (s.fee === 'yes' ? 'paid' : 'price unconfirmed');
-      const has = am.known.length ? am.known.join(', ') : 'no amenities recorded';
-      const unk = am.unknown.length ? `; UNCONFIRMED: ${am.unknown.join(', ')}` : '';
-      const det = (s.detour != null) ? `, ${s.detour.toFixed(0)}km off the route` : '';
-      return `${s.name} (${s.type}) — ${distTime(s)}${det}, ${price}; ${has}${unk}`;
-    }).join(' | ');
-
-    // Rig fit: honest about what the data can and cannot settle (SPEC §0/§5)
-    const rig = currentVehicle;
-    const rigNote = (rig === 'caravan' || rig === 'truck' || rig === 'campervan')
-      ? ` RIG: driver is in a ${VEHICLES[rig].label.toLowerCase()}${userLength ? ' (' + userLength + ' long)' : ''}. Caravan parks and showgrounds generally take a rig this size; small bush camp sites often do not. The data does NOT record rig length, drive-through or unhitching — where that matters say it is unconfirmed and point them to WikiCamps community knowledge or a phone call, never guess.`
-      : '';
-
-    return `CAMPS${corridorNote} — real sites, ranked by fit then detour then value, drive TIMES are real road times, all pinned on the map:${widened} ${list}.${rigNote} Blank fields mean OpenStreetMap has no data — say "unconfirmed" and suggest a call; do not turn a blank into a yes or a no.`;
   } catch(e) {
     return `LOOKUP FAILED — ${navigator.onLine ? 'the map data service isn\'t responding; tell the driver it\'s the service playing up, not their signal, and it usually comes good in a minute' : 'the phone has lost internet; tell the driver you\'ll help once they\'re back in range'}. Could not check camps/parks. Name nothing, invent nothing.`;
   }
@@ -3481,18 +3423,7 @@ async function sendMessage(silent){
     if (namedElsewhere && namedElsewhere[1].toLowerCase() !== currentTown) {
       campsCtx = ` NOTE: the driver asked about "${namedElsewhere[1]}" but is currently nowhere near there — say plainly you can only check places near their CURRENT position right now, and name ${namedElsewhere[1]} back to them so they know you understood. Do not invent or guess anything about ${namedElsewhere[1]}.`;
     } else {
-      // Selection parameters come from context, not interrogation (SPEC §5):
-      // a stated time window, and free/paid only when they actually said it.
-      let windowMins = 60;
-      const hrM = scanText.match(/(?:next|within|in)\s+(?:the\s+)?(\d+(?:\.\d+)?)\s*(hour|hr|h|min)/i);
-      if (hrM) {
-        const n = parseFloat(hrM[1]);
-        windowMins = /min/i.test(hrM[2]) ? n : n * 60;
-      } else if (/half an hour/i.test(scanText)) windowMins = 30;
-      // "free or otherwise" explicitly means either — don't read it as free-only
-      const eitherWay = /free or (otherwise|paid|not)|either way|paid or free/i.test(scanText);
-      const wantFree = (!eitherWay && /\bfree\b/i.test(scanText)) ? true : undefined;
-      campsCtx = await fetchCamps({ windowMins, wantFree });
+      campsCtx = await fetchCamps();
     }
   }
   // Roof-over-our-heads question? Grab hotels, motels, backpackers — same
