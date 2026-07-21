@@ -298,6 +298,15 @@
   .setup-row{display:flex;gap:8px;max-width:380px;margin:0 auto 16px;}
   .setup-row .setup-q{margin:0;}
   .setup-save{display:block;max-width:380px;width:100%;margin:6px auto 0;background:var(--amber);color:var(--navy);border:none;border-radius:11px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;}
+  /* START FRESH — the two destructive options, kept visually apart from Save */
+  .setup-fresh{display:none;max-width:380px;width:100%;margin:22px auto 0;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);}
+  .setup-fresh.on{display:block;}
+  .setup-fresh-title{font-size:11px;color:var(--gray3);text-transform:uppercase;letter-spacing:0.07em;font-weight:600;margin-bottom:9px;}
+  .setup-fresh-btn{display:block;width:100%;text-align:left;background:var(--navy3);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:11px 13px;margin-bottom:9px;color:var(--gray1);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .setup-fresh-btn span{display:block;font-size:11px;font-weight:400;color:var(--gray2);line-height:1.35;margin-top:3px;}
+  .setup-fresh-btn:hover,.setup-fresh-btn:active{border-color:rgba(245,166,35,0.5);}
+  .setup-fresh-btn.danger{border-color:rgba(231,76,60,0.45);color:var(--red);}
+  .setup-fresh-btn.danger:hover,.setup-fresh-btn.danger:active{border-color:var(--red);background:rgba(231,76,60,0.08);}
 </style>
 </head>
 <body>
@@ -377,6 +386,19 @@
   </div>
 
   <button class="setup-save" onclick="saveSetup()">Save &amp; start</button>
+
+  <!-- START FRESH — only shown once a profile exists (nothing to clear before) -->
+  <div class="setup-fresh" id="setupFresh">
+    <div class="setup-fresh-title">Start fresh</div>
+    <button class="setup-fresh-btn" onclick="clearThisTrip()">
+      Clear this trip
+      <span>Wipes the current chat and trip. Keeps your name, rig, fuel and apps.</span>
+    </button>
+    <button class="setup-fresh-btn danger" onclick="startCompletelyFresh()">
+      Start completely fresh
+      <span>Erases everything on this phone and returns to setup. Can't be undone.</span>
+    </button>
+  </div>
 </div>
 
 <!-- TRIP SETUP MODAL -->
@@ -521,7 +543,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 01:26 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 01:45 AM AEST</div>
   </div>
 </div>
 
@@ -975,6 +997,11 @@ function openSetup(prefill) {
     document.getElementById('setupSoloName').value = (soloContact && soloContact.name) || '';
     document.getElementById('setupSoloPhone').value = (soloContact && soloContact.phone) || '';
   }
+  // Start-fresh only makes sense once there's something to clear — a first-run
+  // driver has no profile, no trip and no chat, so it stays out of their way.
+  let hasProfile = false;
+  try { hasProfile = !!localStorage.getItem('navigator_profile'); } catch(e) {}
+  document.getElementById('setupFresh')?.classList.toggle('on', hasProfile);
   document.getElementById('homeScreen')?.classList.add('hidden');
   document.getElementById('appView')?.classList.add('hidden');
   document.getElementById('setupScreen').classList.remove('hidden');
@@ -1336,21 +1363,13 @@ function saveTripSetup() {
 }
 
 // ── RESUME TRIP — pick up a multi-day trip on any launch ──────────────────────
-function renderResumeTrip() {
-  try {
-    const ctx = localStorage.getItem('navigator_last_trip');
-    const raw = JSON.parse(localStorage.getItem('navigator_last_trip_raw') || '{}');
-    if (ctx && raw.dest) {
-      document.getElementById('resumeBtn').style.display = 'block';
-      document.getElementById('clearTripBtn').style.display = 'block';
-      document.getElementById('resumeTitle').textContent = '▶ Resume trip: ' + raw.dest;
-      document.getElementById('clearTitle').textContent = '✕ Clear trip: ' + raw.dest;
-    }
-  } catch(e) {}
-}
+// (renderResumeTrip removed — the home trip card, renderHomeTripCard(), replaced
+// it in Session 1 and it only referenced the deleted start-overlay buttons.)
 
-function clearTrip() {
-  if (!confirm('End this trip? Regular runs & ⭐ stops are kept.')) return;
+// ── START FRESH — two levels, both confirmed ─────────────────────────────────
+// 1) Clear this trip: the drive goes, the driver stays.
+function clearThisTrip() {
+  if (!confirm("Clear this trip?\n\nWipes the current conversation and trip — including any route, pins and saved plan.\n\nYour profile stays: name, rig, fuel and the apps you own.")) return;
   try {
     localStorage.removeItem('navigator_last_trip');
     localStorage.removeItem('navigator_last_trip_raw');
@@ -1358,13 +1377,21 @@ function clearTrip() {
   } catch(e) {}
   tripContext = '';
   currentRunDest = '';
-  updateSuggestions();   // back to nearby mode
   window._tripRoute = null;
-  if (routeLine && window._navMap) { window._navMap.removeLayer(routeLine); routeLine = null; }
-  if (routeDestMarker && window._navMap) { window._navMap.removeLayer(routeDestMarker); routeDestMarker = null; }
-  clearOptionPins();
-  document.getElementById('resumeBtn').style.display = 'none';
-  document.getElementById('clearTripBtn').style.display = 'none';
+  if (routeLine && window._navMap) { try { window._navMap.removeLayer(routeLine); } catch(e) {} routeLine = null; }
+  if (routeDestMarker && window._navMap) { try { window._navMap.removeLayer(routeDestMarker); } catch(e) {} routeDestMarker = null; }
+  // resetConversation clears chat, session, pins, hides the map and lands home
+  resetConversation();
+}
+
+// 2) Start completely fresh: nothing of this driver is kept.
+function startCompletelyFresh() {
+  if (!confirm("Start completely fresh?\n\nErases EVERYTHING stored on this phone — name, rig, fuel, height/length, the apps you own, your solo contact, trips, saved runs and the fuel log — and returns you to setup.\n\nThis can't be undone.")) return;
+  try { localStorage.clear(); } catch(e) {}
+  // Reload rather than unpick state by hand: it's the only way to guarantee
+  // nothing survives into the interview. loadProfile() then sees no profile
+  // and opens setup.
+  window.location.replace(window.location.pathname);
 }
 
 function resumeTrip() {
