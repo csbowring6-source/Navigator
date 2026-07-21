@@ -564,7 +564,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 09:15 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 09:23 AM AEST</div>
   </div>
 </div>
 
@@ -2900,32 +2900,114 @@ function distKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// ── CORRIDOR SELECTION (pure — bench-testable, no DOM/network) (S2.2) ─────────
+// Given camps that ALREADY carry km/mins (drive time, injected by the caller),
+// the driver's position, the route path, rig and time window, decide which
+// sites to offer: AHEAD only in the direction of travel, inside the drive-time
+// window, rig-fit hard-filtered, ranked. Returns { directional, widened, rigFiltered,
+// total, sites }. Network (OSM fetch + OSRM times) stays in the async wrapper.
+function selectCorridorCamps(camps, opts) {
+  opts = opts || {};
+  const { gps, routePath, rig, windowMins = 60 } = opts;
+  const hasRoute = !!(routePath && routePath.length > 2);
+  let all = (camps || []).map(c => Object.assign({}, c));
+
+  // RIG-FIT HARD FILTER (from profile). OSM has no rig-size tag, so for a big
+  // rig (caravan/truck) we filter by TYPE + power: caravan parks, showgrounds,
+  // holiday/tourist parks, or any powered site — the sort of place a van fits.
+  // Generic unpowered bush "camp site" pull-ins are excluded. This is a
+  // type/power approximation, NOT a size guarantee (Ticket 3 says so aloud).
+  const bigRig = rig === 'caravan' || rig === 'truck';
+  let rigFiltered = false;
+  if (bigRig) {
+    const before = all.length;
+    all = all.filter(c => {
+      const t = (c.type || '').toLowerCase();
+      return /caravan|van park|holiday|tourist|showground|big4|discovery|top ?tourist/.test(t) || c.powered === 'yes';
+    });
+    rigFiltered = all.length !== before;
+  }
+
+  // AHEAD ONLY + within the route corridor
+  let directional = false;
+  if (hasRoute && gps) {
+    const myProg = progressAlongRoute(gps.lat, gps.lon, routePath);
+    all.forEach(c => {
+      c.prog   = progressAlongRoute(c.lat, c.lon, routePath);
+      c.detour = distToRoute(c.lat, c.lon, routePath);
+    });
+    all = all.filter(c => c.prog > myProg + 0.004 && c.detour <= 15);
+    directional = true;
+  }
+
+  // DRIVE-TIME window (never straight-line). If empty, widen and flag it.
+  const timed = all.filter(c => c.mins != null);
+  let inWindow = timed.filter(c => c.mins <= windowMins);
+  let widened = false;
+  if (!inWindow.length && timed.length) {
+    inWindow = timed.slice().sort((a,b) => a.mins - b.mins).slice(0, 3);
+    widened = true;
+  }
+  // Rank: least detour (fit) → soonest (time). Value/amenity ordering is Ticket 3.
+  inWindow.sort((a,b) => {
+    const det = (a.detour ?? 0) - (b.detour ?? 0);
+    if (Math.abs(det) > 3) return det;
+    return (a.mins ?? 9999) - (b.mins ?? 9999);
+  });
+
+  return { directional, widened, rigFiltered, total: inWindow.length, sites: inWindow.slice(0, 6) };
+}
+
+// Async wrapper: fetch OSM camps, attach real drive times, run the pure selector,
+// build the AI context. (Answer wording / call handoff / results view are S2.3–4.)
 async function fetchCamps() {
   if (!gps) return '';
   try {
-    const r = await fetch(`${API_URL}camps?lat=${gps.lat}&lon=${gps.lon}&radius=40`);
+    const onTrip = !!(currentRunDest && window._tripRoute && window._tripRoute.path && window._tripRoute.path.length > 2);
+    const radius = onTrip ? 90 : 40;   // a corridor runs past a 40km bubble
+    const r = await fetch(`${API_URL}camps?lat=${gps.lat}&lon=${gps.lon}&radius=${radius}`);
     const d = await r.json();
-    if (d.results && d.results.length) {
-      const cands = d.results
-        .filter(s => s.lat && s.lon)
-        .map(s => ({ ...s, lat: +s.lat, lon: +s.lon, crow: distKm(gps.lat, gps.lon, s.lat, s.lon) }))
-        .sort((a,b) => a.crow - b.crow)
-        .slice(0, 6);
-      if (!cands.length) return '';
-      const roads = await roadDistances(gps.lat, gps.lon, cands);
-      cands.forEach((c,i) => {
-        c.km   = (roads[i] && roads[i].km != null) ? roads[i].km : c.crow;
-        c.mins = roads[i] ? roads[i].mins : null;
-      });
-      cands.sort((a,b) => a.km - b.km);
-      notePlaces(cands.map(s => s.name));
-      addPendingPins(cands.map(s => ({ name: s.name, price: null, km: s.km, mins: s.mins, lat: s.lat, lon: s.lon })));
-      const list = cands.map(s => {
-        const bits = [s.type, s.fee==='no'?'free':'', s.powered&&s.powered!=='no'?'powered':'', s.dump==='yes'?'dump point':''].filter(Boolean).join(', ');
-        return `${s.name} — ${distTime(s)} (${bits})`;
-      }).join('; ');
-      return `NEARBY CAMPS/PARKS (real sites, nearest first by ROAD, all pinned on the driver's map; tag data may be incomplete): ${list}.`;
+    if (!d.results || !d.results.length) {
+      return `NO CAMPS in the data within ${radius}km. Say plainly nothing is showing out here and offer to widen — invent nothing.`;
     }
+    // Shortlist by crow first (keeps the OSRM table call small), then real times.
+    const cands = d.results.filter(s => s.lat && s.lon)
+      .map(s => ({ ...s, lat: +s.lat, lon: +s.lon, crow: distKm(gps.lat, gps.lon, s.lat, s.lon) }))
+      .sort((a,b) => a.crow - b.crow)
+      .slice(0, 12);
+    const roads = await roadDistances(gps.lat, gps.lon, cands);
+    cands.forEach((c,i) => { c.km = (roads[i] && roads[i].km != null) ? roads[i].km : c.crow; c.mins = roads[i] ? roads[i].mins : null; });
+
+    const sel = selectCorridorCamps(cands, {
+      gps, routePath: onTrip ? window._tripRoute.path : null,
+      rig: currentVehicle, windowMins: 60,
+    });
+
+    if (!sel.sites.length) {
+      return onTrip
+        ? `NOTHING AHEAD: no camps found ahead on the ${currentRunDest} route within the window. Say so plainly and offer to widen or look further along — never offer sites behind the driver, never pad.`
+        : `NO CAMPS matched within the window. Say so and offer to widen — invent nothing.`;
+    }
+
+    notePlaces(sel.sites.map(s => s.name));
+    addPendingPins(sel.sites.map(s => ({ name: s.name, price: null, km: s.km, mins: s.mins, lat: s.lat, lon: s.lon })));
+
+    const list = sel.sites.map(s => {
+      const known = [], unknown = [];
+      const tag = (v, yes, name) => { if (v === 'yes') known.push(yes); else if (v !== 'no') unknown.push(name); };
+      tag(s.powered, 'powered', 'power'); tag(s.toilets, 'toilets', 'toilets'); tag(s.water, 'water', 'water'); tag(s.dump, 'dump point', 'dump point');
+      const price = s.fee === 'no' ? 'FREE' : (s.fee === 'yes' ? 'paid' : 'price unconfirmed');
+      const det = s.detour != null ? `, ${s.detour.toFixed(0)}km off route` : '';
+      return `${s.name} (${s.type}) — ${distTime(s)}${det}, ${price}; has ${known.length?known.join(', '):'nothing recorded'}${unknown.length?`; UNCONFIRMED: ${unknown.join(', ')}`:''}`;
+    }).join(' | ');
+
+    const dir = sel.directional
+      ? `AHEAD on the ${currentRunDest} route only (behind the driver already excluded)`
+      : `nearest by road (no trip set, so not filtered to a direction)`;
+    const wide = sel.widened ? ' NOTE: nothing sat inside the hour — say that first, then offer these as the nearest beyond it.' : '';
+    const rigTxt = sel.rigFiltered ? ` Filtered to sites a ${VEHICLES[currentVehicle].label.toLowerCase()} fits by type/power — OSM has no rig-size tag, so drive-through/unhitching is UNCONFIRMED; where it matters say so and suggest a call or WikiCamps, never guess.` : '';
+
+    return `CAMPS — ${dir}, ranked by fit then drive time, real road times, all pinned:${wide} ${list}.${rigTxt} A blank field is neither yes nor no — say "unconfirmed".`;
   } catch(e) {
     return `LOOKUP FAILED — ${navigator.onLine ? 'the map data service isn\'t responding; tell the driver it\'s the service playing up, not their signal, and it usually comes good in a minute' : 'the phone has lost internet; tell the driver you\'ll help once they\'re back in range'}. Could not check camps/parks. Name nothing, invent nothing.`;
   }
