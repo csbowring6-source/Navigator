@@ -18,7 +18,17 @@
 
   /* HEADER */
   .header{background:var(--navy2);border-bottom:1px solid rgba(245,166,35,0.25);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-  .logo{display:flex;align-items:center;gap:8px;}
+  .logo{display:flex;align-items:center;gap:8px;cursor:pointer;}
+
+  /* VERSION LINE — tap the title on any screen to see the build + update state */
+  .version-line{display:none;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--navy3);border-bottom:1px solid rgba(255,255,255,0.08);
+    padding:6px 14px;font-size:11px;color:var(--gray2);flex-shrink:0;line-height:1.3;}
+  .version-line.open{display:flex;}
+  .version-line.stale{background:rgba(245,166,35,0.14);border-bottom-color:rgba(245,166,35,0.4);color:var(--amber);font-weight:600;}
+  .version-line.stale #versionLineText{cursor:pointer;text-decoration:underline;}
+  .version-x{background:none;border:none;color:var(--gray3);font-size:13px;cursor:pointer;padding:2px 4px;font-family:inherit;line-height:1;flex-shrink:0;}
+  .version-x:hover,.version-x:active{color:var(--amber);}
   .logo-icon{width:28px;height:28px;background:var(--amber);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;}
   .logo-text{font-size:16px;font-weight:600;letter-spacing:-0.3px;}
   .header-right{display:flex;align-items:center;gap:8px;}
@@ -435,7 +445,7 @@
 
 <!-- HEADER -->
 <div class="header">
-  <div class="logo">
+  <div class="logo" onclick="toggleVersionLine()" title="Tap for version">
     <div class="logo-icon">🧭</div>
     <div><div class="logo-text">Navigator</div></div>
   </div>
@@ -453,6 +463,12 @@
     </div>
     <button class="sos-btn" onclick="openSOS()" title="Emergency help — call 000, find nearest help">🆘</button>
   </div>
+</div>
+
+<!-- VERSION LINE — tap the title on any screen; dismissible, no navigation -->
+<div class="version-line" id="versionLine">
+  <span id="versionLineText" onclick="versionLineAction()"></span>
+  <button class="version-x" onclick="dismissVersionLine()" title="Dismiss">✕</button>
 </div>
 
 <!-- SOS EMERGENCY PANEL -->
@@ -505,7 +521,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 01:03 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 01:26 AM AEST</div>
   </div>
 </div>
 
@@ -3451,23 +3467,33 @@ async function sendMessage(silent){
 // ── VERSION CHECK ─────────────────────────────────────────────────────────────
 // Compares this page's build stamp against the live file on GitHub.
 // Current → stamp turns green with a tick. Stale → tap-to-update banner.
+// Returns 'current' | 'stale' | 'unknown' so a tap can report the result, while
+// keeping the background behaviour it always had (green stamp / update banner).
 async function checkVersion(){
   try{
     const res = await fetch(window.location.pathname + '?nocache=' + Date.now(), {cache:'no-store'});
     const html = await res.text();
     // Grab the stamp's inner HTML (may contain <br>), then normalise to plain text
     const m = html.match(/id="buildStamp"[^>]*>([\s\S]*?)<\/div>/);
-    if(!m) return;
+    if(!m) return 'unknown';
     const norm = s => s.replace(/<br\s*\/?>/gi,' ').replace(/<[^>]+>/g,'').replace(/✓/g,'').replace(/\s+/g,' ').trim();
     const liveStamp = norm(m[1]);
     const el = document.getElementById('buildStamp');
+    if(!el) return 'unknown';
     const myStamp = norm(el.innerHTML);
     if(liveStamp === myStamp){
       el.style.color = '#2ECC71';
-    } else {
-      showUpdateBanner();
+      return 'current';
     }
-  }catch(e){}
+    showUpdateBanner();
+    return 'stale';
+  }catch(e){ return 'unknown'; }
+}
+
+// Force a fresh copy past any cache, then hard-reload
+function reloadForUpdate(){
+  fetch(window.location.pathname + '?bust=' + Date.now(), {cache:'reload'})
+    .finally(() => { window.location.replace(window.location.pathname + '?v=' + Date.now()); });
 }
 
 function showUpdateBanner(){
@@ -3476,13 +3502,51 @@ function showUpdateBanner(){
   b.id = 'updateBanner';
   b.textContent = '⬆ New version available — tap to update';
   b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:3000;background:#F5A623;color:#0A1628;text-align:center;padding:10px;font-size:13px;font-weight:600;cursor:pointer;';
-  b.onclick = () => {
-    b.textContent = '⬆ Updating...';
-    // Force a fresh copy past any cache, then hard-reload
-    fetch(window.location.pathname + '?bust=' + Date.now(), {cache:'reload'})
-      .finally(() => { window.location.replace(window.location.pathname + '?v=' + Date.now()); });
-  };
+  b.onclick = () => { b.textContent = '⬆ Updating...'; reloadForUpdate(); };
   document.body.appendChild(b);
+}
+
+// ── VERSION LINE — tap the title on any screen ────────────────────────────────
+// The stamp only lives on the home screen, so from chat/results there was no way
+// to check the build without navigating away. This reports it in place: no
+// navigation, nothing lost, and it says plainly whether a newer build exists.
+let versionStale = false;
+
+function stampOnly(){
+  const el = document.getElementById('buildStamp');
+  return el ? el.textContent.replace(/^✓\s*/,'').trim() : 'version unknown';
+}
+function setVersionLine(text){
+  const t = document.getElementById('versionLineText');
+  if (t) t.textContent = text;
+}
+function dismissVersionLine(){
+  document.getElementById('versionLine')?.classList.remove('open');
+}
+function versionLineAction(){
+  if (versionStale) reloadForUpdate();   // the line itself is the update button
+}
+
+async function toggleVersionLine(){
+  const line = document.getElementById('versionLine');
+  if (!line) return;
+  if (line.classList.contains('open')) { dismissVersionLine(); return; }
+  versionStale = false;
+  line.classList.remove('stale');
+  setVersionLine(stampOnly() + ' · checking…');
+  line.classList.add('open');
+  const status = await checkVersion();    // fresh check on every tap
+  if (!line.classList.contains('open')) return;   // dismissed while checking
+  if (status === 'current') {
+    setVersionLine(stampOnly() + ' · ✓ up to date');
+  } else if (status === 'stale') {
+    versionStale = true;
+    line.classList.add('stale');
+    setVersionLine(stampOnly() + ' · update available — tap to reload');
+  } else {
+    // Honest about not knowing rather than implying it's current
+    setVersionLine(stampOnly() + ' · couldn\'t check just now');
+  }
 }
 
 // Back-button guards are gone: with the welcome overlay deleted there is no
