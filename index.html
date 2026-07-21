@@ -564,7 +564,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 02:43 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 02:25 AM AEST</div>
   </div>
 </div>
 
@@ -2138,32 +2138,10 @@ function toggleVoice() {
   else startListening();
 }
 
-// Everything committed so far, plus this instance's final and the live interim
-// tail — MERGED, not concatenated. Android re-delivers audio across instances,
-// so raw concatenation duplicates words both on screen and in what gets sent.
+// Everything committed so far, plus the live interim tail (shown, not committed).
 function capturedText() {
-  return mergeFinal(mergeFinal(committedFinal, instanceFinal), interimText);
+  return (committedFinal + ' ' + instanceFinal + ' ' + interimText).replace(/\s+/g,' ').trim();
 }
-// Merge a newly-finalised chunk into the committed transcript without ever
-// repeating words. Android hands the same audio to more than one recogniser
-// instance, so a chunk may be a full re-hear (drop it) or overlap the tail of
-// what we already have (stitch at the seam) — plain appending is what produced
-// the repeated-fragment salad.
-function mergeFinal(committed, addition) {
-  const a = (committed || '').trim(), b = (addition || '').trim();
-  if (!b) return a;
-  if (!a) return b;
-  const al = a.toLowerCase(), bl = b.toLowerCase();
-  if (al.includes(bl)) return a;                 // already have it — a re-hear
-  const max = Math.min(al.length, bl.length);
-  for (let n = max; n > 3; n--) {                // longest tail/head overlap wins
-    if (al.slice(-n) === bl.slice(0, n)) {
-      return (a + b.slice(n)).replace(/\s+/g,' ').trim();
-    }
-  }
-  return (a + ' ' + b).replace(/\s+/g,' ').trim();
-}
-
 function showCaptured(text) {
   const ui = document.getElementById('userInput');
   if (ui) { ui.value = text; try { autoResize(ui); } catch(e) {} }
@@ -2209,15 +2187,6 @@ function startListening() {
 }
 
 function startRecogniser() {
-  // Cut the previous instance loose first. A zombie recogniser still wired to
-  // onresult would feed the same audio in alongside the new one — another way
-  // to duplicate words.
-  if (recognition) {
-    try {
-      recognition.onend = null; recognition.onresult = null; recognition.onerror = null;
-      if (recognition.abort) recognition.abort(); else recognition.stop();
-    } catch(e) {}
-  }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SR();
   recognition.lang = 'en-AU';
@@ -2253,13 +2222,13 @@ function startRecogniser() {
   };
 
   recognition.onend = () => {
-    // Carry forward FINALS ONLY, merged overlap-aware. Android restarts often
-    // re-deliver audio the previous instance already finalised, so a plain
-    // append (or an endsWith guard, which only catches an immediate repeat)
-    // rebuilds the word salad: "right so I'm in Cairns I'm gonna right so I'm
-    // in Cairns". mergeFinal drops a re-heard chunk and stitches a partial
-    // overlap instead of duplicating it.
-    committedFinal = mergeFinal(committedFinal, instanceFinal);
+    // Carry forward FINALS ONLY. The interim tail is deliberately dropped: the
+    // next recogniser may re-hear that audio, and committing it here is what
+    // produced repeated fragments. Idempotent, so a double onend can't double it.
+    const done = instanceFinal;
+    if (done && !committedFinal.endsWith(done)) {
+      committedFinal = (committedFinal + ' ' + done).replace(/\s+/g,' ').trim();
+    }
     instanceFinal = ''; interimText = '';
     if (!captureActive) return;        // a deliberate stop — stopCapture sends
     // Android ended us early but the driver isn't finished: start another.
