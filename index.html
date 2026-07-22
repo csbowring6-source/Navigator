@@ -564,7 +564,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 02:24 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 08:15 PM AEST</div>
   </div>
 </div>
 
@@ -2244,11 +2244,55 @@ function armSilenceTimer() {
   silenceTimer = setTimeout(() => { if (captureActive) stopCapture(true); }, SILENCE_MS);
 }
 
-function startListening() {
+let micGranted = false;   // true once the OS mic permission is confirmed granted
+let micPending = false;   // a permission prompt is open — don't re-enter
+
+// NEVER start the recogniser deaf. On iOS Safari the very first run has no mic
+// permission yet; calling recognition.start() then starts a deaf recogniser that
+// fails silently and only works after a full restart. So confirm the grant FIRST:
+// getUserMedia shows the prompt and its promise resolves only when the user taps
+// Allow — we wait for that, then open the recogniser. Returns true = clear to start.
+async function ensureMicPermission() {
+  if (micGranted) return true;
+  // If the Permissions API already knows the answer, trust it (skips a re-prompt).
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      const st = await navigator.permissions.query({ name: 'microphone' });
+      if (st.state === 'granted') { micGranted = true; return true; }
+      if (st.state === 'denied') {
+        setVoiceStatus('', '🎙 Microphone is blocked — allow it for this site in Safari settings, then tap again');
+        return false;
+      }
+    }
+  } catch (e) { /* Safari can't query 'microphone' — fall through to a real prompt */ }
+  // Unknown or 'prompt': ask now and WAIT for the grant before starting.
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    setVoiceStatus('listening', '🎙 I need the mic — tap Allow when Safari asks');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());   // only needed the grant; SR opens its own
+      micGranted = true;
+      return true;
+    } catch (e) {
+      setVoiceStatus('', '🎙 I need the mic — tap Allow when Safari asks, or type it below');
+      return false;
+    }
+  }
+  return true;   // no getUserMedia (very old browser) — let the recogniser try
+}
+
+async function startListening() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     alert('Voice not supported. Try Chrome on Android.'); return;
   }
+  if (captureActive || micPending) return;   // already live, or waiting on the prompt
   synth?.cancel();
+  // Gate on a confirmed mic grant so we never open a deaf recogniser (the iOS
+  // first-run race). In steady state this resolves instantly (micGranted).
+  micPending = true;
+  const allowed = await ensureMicPermission();
+  micPending = false;
+  if (!allowed) { resetVoiceUI(); return; }
   captureActive = true;
   committedFinal = ''; instanceFinal = ''; interimText = '';
   heardSpeech = false; restartBurst = 0;
@@ -2307,11 +2351,12 @@ function startRecogniser() {
   };
 
   recognition.onerror = e => {
-    if (e.error === 'not-allowed') {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       captureActive = false;
+      micGranted = false;   // permission was pulled — re-prompt on the next tap
       clearTimeout(silenceTimer); clearTimeout(noSpeechTimer);
       resetVoiceUI();
-      alert('Microphone blocked. Please allow access in browser settings.');
+      setVoiceStatus('', '🎙 Microphone is blocked — allow it for this site in Safari settings, then tap again');
     }
     // no-speech / network / aborted fall through to onend, which restarts
   };
