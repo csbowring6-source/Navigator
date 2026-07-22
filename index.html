@@ -564,7 +564,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 23 Jul 2026, 08:55 AM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 23 Jul 2026, 09:12 AM AEST</div>
   </div>
 </div>
 
@@ -2468,14 +2468,18 @@ function parseDest(text){
   return null;
 }
 
-function addMsg(role,text){
+function addMsg(role,text,spoken){
   document.getElementById('welcome')?.remove();
   const chat=document.getElementById('chatArea');
   const div=document.createElement('div'); div.className='msg '+(role==='user'?'user':'nav');
   const av=document.createElement('div'); av.className='msg-avatar'; av.textContent=role==='user'?'👤':'🧭';
   const bub=document.createElement('div'); bub.className='msg-bubble';
   const cleaned=cleanText(text);
-  if (role==='nav') { lastNavReply = cleaned; lastSpoken = cleaned; }
+  // When a message has a separate SPOKEN variant (camps answers: banner = full
+  // detail, aloud = confirmed only), replay/"say again" must use the spoken one —
+  // otherwise they read the whole banner back, unconfirmed lists and all.
+  const spokenText = (role==='nav' && spoken) ? spoken : cleaned;
+  if (role==='nav') { lastNavReply = cleaned; lastSpoken = spokenText; }
   const p=document.createElement('p'); p.textContent=cleaned; bub.appendChild(p);
   if(role==='nav'){
     // Which known real places does this reply mention? Two or more = pick buttons
@@ -2527,7 +2531,7 @@ function addMsg(role,text){
     // Feedback row — the buttons are decisions, not just notes
     const fbRow=document.createElement('div'); fbRow.className='feedback-row';
     const replay=document.createElement('button'); replay.className='fb-btn'; replay.textContent='🔊'; replay.title='Say that again';
-    replay.onclick=()=>{ speak(cleaned); };
+    replay.onclick=()=>{ speak(spokenText); };
     fbRow.appendChild(replay);
     const thumbUp=document.createElement('button'); thumbUp.className='fb-btn'; thumbUp.textContent='👍'; thumbUp.title='Yes — lock it in';
     // Is this a fuel-price reply with a shortlist to dial through?
@@ -3157,8 +3161,8 @@ function formatCampsAnswer(res) {
     const ph = verifiedPhone(s);
     const facts = [...am.known];
     if (price) facts.push(price);                            // price last, never "unconfirmed"
-    if (!facts.length)
-      return `${s.name}, ${t} — details unconfirmed, one to ring${ph ? ': ' + speakablePhone(ph) : ''}.`;
+    if (!facts.length)   // "unconfirmed" is reserved for the ONE closing line
+      return `${s.name}, ${t} — details to confirm, one to ring${ph ? ': ' + speakablePhone(ph) : ''}.`;
     return `${s.name}, ${t} — ${facts.join(', ')}${ph ? `, on ${speakablePhone(ph)}` : ''}.`;
   });
   const best = sites[0];
@@ -3254,8 +3258,8 @@ async function answerCamps(scanText) {
     ? { type: 'number-search', site: ans.sites[0].name, sites: ans.sites.map(s => s.name) }
     : null;
   if (ans.sites.length) { addPendingPins(ans.sites.map(s => ({ name: s.name, lat: s.lat, lon: s.lon, mins: s.mins }))); notePlaces(ans.sites.map(s => s.name)); }
-  addMsg('nav', ans.text);            // full detail stays in the text banner
-  speak(ans.spoken || ans.text);      // aloud: confirmed facts only
+  addMsg('nav', ans.text, ans.spoken);   // banner: full detail; replay/"say again": spoken variant
+  speak(ans.spoken || ans.text);         // aloud: confirmed facts only
   // Interleave a one-tap Call (verified numbers only) after each site's Navigate
   // button; offer a search where the best fit has no verified number.
   const bubbles = document.querySelectorAll('#chatArea .msg.nav .msg-bubble');
