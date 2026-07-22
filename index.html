@@ -564,7 +564,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 01:41 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 02:24 PM AEST</div>
   </div>
 </div>
 
@@ -2989,6 +2989,57 @@ async function getCorridorCamps() {
   return { sites: sel.sites.slice(0, 3), directional: sel.directional, widened: sel.widened, rigFiltered: sel.rigFiltered };
 }
 
+// Geocode a named place browser-side (Nominatim, no key) → {lat,lon} or null.
+async function geocodePlace(name) {
+  try {
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 10000);
+    const u = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=au&q=${encodeURIComponent(name)}`;
+    const r = await fetch(u, { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+    clearTimeout(to);
+    const d = await r.json();
+    if (d && d[0] && d[0].lat) return { lat: +d[0].lat, lon: +d[0].lon };
+  } catch (e) {}
+  return null;
+}
+
+// Camps AROUND a named place (NOT the corridor). When the driver names a town —
+// "caravan parks in Cardwell" — they mean Cardwell, not wherever they are now.
+// Nearest-to-the-town first; rig-fit still a hard filter; drive time is time-to-
+// ARRIVE from the driver's GPS (how far until I'm there), or km from town if no GPS.
+async function getCampsNear(place) {
+  const c = await geocodePlace(place);
+  if (!c) return { error: 'no-place', place };
+  let d;
+  try {
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 15000);
+    const r = await fetch(`${API_URL}camps?lat=${c.lat}&lon=${c.lon}&radius=25`, { signal: ctrl.signal });
+    clearTimeout(to);
+    d = await r.json();
+  } catch (e) {
+    return { error: navigator.onLine ? 'service' : 'offline', place };
+  }
+  if (!d.results || !d.results.length) return { error: 'empty-place', place };
+  let cands = d.results.filter(s => s.lat && s.lon)
+    .map(s => ({ ...s, lat: +s.lat, lon: +s.lon, crow: distKm(c.lat, c.lon, s.lat, s.lon) }))
+    .sort((a,b) => a.crow - b.crow).slice(0, 12);
+  // Same rig-fit hard filter as the corridor, but NO ahead/drive-time-window filter.
+  const bigRig = currentVehicle === 'caravan' || currentVehicle === 'truck';
+  if (bigRig) {
+    const kept = cands.filter(s => {
+      const t = (s.type || '').toLowerCase();
+      return /caravan|van park|holiday|tourist|showground|big4|discovery|top ?tourist/.test(t) || s.powered === 'yes';
+    });
+    if (kept.length) cands = kept;
+  }
+  if (gps) {
+    const roads = await roadDistances(gps.lat, gps.lon, cands);
+    cands.forEach((s,i) => { s.km = (roads[i] && roads[i].km != null) ? roads[i].km : s.crow; s.mins = roads[i] ? roads[i].mins : null; });
+  } else {
+    cands.forEach(s => { s.km = s.crow; s.mins = null; });
+  }
+  return { sites: cands.slice(0, 3), directional: false, near: true, place };
+}
+
 // ── ANSWER SHAPE + CALL HANDOFF (S2.3) — deterministic, so the TRUST RULE is
 // enforced in code: a phone number is only ever SPOKEN if it is in the data.
 const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
@@ -3026,12 +3077,14 @@ function formatCampsAnswer(res) {
       'service': "The camp data service is playing up — not your signal. Try again in a minute.",
       'none-ahead': `Nothing showing ahead on the ${currentRunDest} route right now. Want me to widen the search or look further along?`,
       'empty': "No campsites showing in the data around here right now. Want me to widen the search?",
+      'no-place': `I couldn't find ${res.place} on the map — can you say the town again?`,
+      'empty-place': `No caravan parks showing in the data around ${res.place} right now. Want me to widen the search?`,
     };
     return { text: map[res.error] || map['service'], sites: [] };
   }
   const sites = (res.sites || []).slice(0, 3);
   const n = sites.length;
-  const where = res.directional ? 'ahead' : 'nearby';
+  const where = res.near ? `near ${res.place}` : res.directional ? 'ahead' : 'nearby';
   // COUNT-FIRST — never imply three exist when they don't.
   let head = n === 1 ? `Only one ${where}:` : n === 2 ? `I can only find two ${where}:` : `Three ${where}:`;
   if (res.widened) head = n === 1 ? `Nothing inside the hour — one a bit further ${where}:`
@@ -3065,21 +3118,20 @@ function isCampsQuery(text) {
 }
 
 async function answerCamps(scanText) {
-  // Honesty: they named a town they're not near — don't silently search elsewhere.
-  // BUT naming your own destination is fine ("caravan parks in Cardwell" on a
-  // Cardwell trip) — the corridor search already runs ahead toward it, so only
-  // block a town that's neither where you are nor where you're headed.
-  const namedElsewhere = scanText.match(/\bin\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\b/);
-  const currentTown = (gpsAddress || '').split(',')[0].trim().toLowerCase();
-  const named = namedElsewhere ? namedElsewhere[1].toLowerCase() : '';
-  const dest  = (currentRunDest || '').toLowerCase();
-  const headingThere = dest && (dest.includes(named) || named.includes(dest));
-  if (namedElsewhere && named !== currentTown && !headingThere) {
-    const msg = `I can only check camps near where you are right now, not ${namedElsewhere[1]}. Want me to look around you instead?`;
-    addMsg('nav', msg); speak(msg);
-    return;
+  // ROUTING: when the driver NAMES a place ("caravan parks in Cardwell"), search
+  // AROUND that place — not the corridor. The corridor (ahead / within the hour)
+  // is only for "along the way / next hour" phrasing that names no place; using it
+  // for a named town returned parks near the ORIGIN, which is the bug this fixes.
+  const alongWay = /\b(along|on (?:the|my) (?:route|way)|next hour|within (?:the|an) hour|on the way|up ahead|ahead of me|near me|around here|nearby)\b/i.test(scanText);
+  const namedMatch = scanText.match(/\b(?:in|at|near|around|to)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\b/);
+  let named = (namedMatch && !alongWay) ? namedMatch[1] : null;
+  // Voice transcripts are often lowercase — if they say "in <destination>" and
+  // that's the live trip's destination, honour it even without a capital letter.
+  if (!named && !alongWay && currentRunDest) {
+    const re = new RegExp('\\b(?:in|at|near|around|to)\\s+' + currentRunDest.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i');
+    if (re.test(scanText)) named = currentRunDest;
   }
-  const ans = formatCampsAnswer(await getCorridorCamps());
+  const ans = formatCampsAnswer(named ? await getCampsNear(named) : await getCorridorCamps());
   if (ans.sites.length) { addPendingPins(ans.sites.map(s => ({ name: s.name, lat: s.lat, lon: s.lon, mins: s.mins }))); notePlaces(ans.sites.map(s => s.name)); }
   addMsg('nav', ans.text);   // draws the Navigate button(s) from the pins
   speak(ans.text);
