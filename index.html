@@ -564,7 +564,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 01:16 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 22 Jul 2026, 01:41 PM AEST</div>
   </div>
 </div>
 
@@ -3055,17 +3055,26 @@ function formatCampsAnswer(res) {
   };
 }
 
-// Is this a camps request? (Fuel-mixed queries fall through to the AI path.)
+// Is this a camps/parks request? Match plurals and phrasings robustly — the old
+// \bcaravan park\b / \bcampsite\b failed on "caravan parks", "campsites", "camp
+// sites", so those questions wrongly reached the AI relay. A camps/parks question
+// ALWAYS takes the deterministic /camps path (getCorridorCamps handles no-GPS),
+// so a phone number is never AI-composed and the answer never comes back empty.
 function isCampsQuery(text) {
-  return /\b(campsite|camp site|camps?|caravan park|powered site|free camp|dump point|somewhere to (stay|camp)|stay tonight|camp tonight|overnight stop)\b/i.test(text)
-    && !/\b(fuel|servo|petrol|diesel|coffee|toilet|breakfast|lunch|dinner)\b/i.test(text);
+  return /\b(?:campgrounds?|campsites?|camp ?sites?|camping|camps?|caravan ?parks?|van ?parks?|holiday ?parks?|tourist ?parks?|caravan ?sites?|powered ?sites?|free ?camps?|dump ?points?|showgrounds?|somewhere to (?:stay|camp)|(?:stay|camp) tonight|overnight (?:stop|stay|spot|park))\b/i.test(text);
 }
 
 async function answerCamps(scanText) {
   // Honesty: they named a town they're not near — don't silently search elsewhere.
+  // BUT naming your own destination is fine ("caravan parks in Cardwell" on a
+  // Cardwell trip) — the corridor search already runs ahead toward it, so only
+  // block a town that's neither where you are nor where you're headed.
   const namedElsewhere = scanText.match(/\bin\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\b/);
   const currentTown = (gpsAddress || '').split(',')[0].trim().toLowerCase();
-  if (namedElsewhere && namedElsewhere[1].toLowerCase() !== currentTown) {
+  const named = namedElsewhere ? namedElsewhere[1].toLowerCase() : '';
+  const dest  = (currentRunDest || '').toLowerCase();
+  const headingThere = dest && (dest.includes(named) || named.includes(dest));
+  if (namedElsewhere && named !== currentTown && !headingThere) {
     const msg = `I can only check camps near where you are right now, not ${namedElsewhere[1]}. Want me to look around you instead?`;
     addMsg('nav', msg); speak(msg);
     return;
@@ -3840,7 +3849,12 @@ async function sendMessage(silent){
       messages.pop();   // drop the unanswered turn so a retry stays clean
       addMsg('nav', msg);
     } else {
-      const reply = data && data.content && data.content[0] && data.content[0].text;
+      // Find the first text block rather than assuming content[0] is text — a
+      // leading non-text block (or content ordering) would otherwise read as empty.
+      const textBlock = Array.isArray(data && data.content)
+        ? data.content.find(b => b && b.type === 'text' && b.text) : null;
+      const reply = textBlock ? textBlock.text
+        : (data && data.content && data.content[0] && data.content[0].text) || '';
       if (reply) {
         messages.push({role:'assistant',content:reply});
         addMsg('nav',reply);
@@ -3850,7 +3864,10 @@ async function sendMessage(silent){
           showOptionPins(window._pendingPins);
         }
       } else {
-        console.error('AI response had no text content:', data);
+        // Log the shape so an empty reply is diagnosable next time (stop_reason
+        // 'refusal'/'max_tokens', empty content array, or a non-text block).
+        console.error('AI response had no text content — stop_reason:',
+          data && data.stop_reason, '| content:', JSON.stringify(data && data.content), '| full:', data);
         messages.pop();
         addMsg('nav','The AI sent back an empty reply — try again, or reword it.');
       }
