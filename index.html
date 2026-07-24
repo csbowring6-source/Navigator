@@ -564,7 +564,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 24 Jul 2026, 12:20 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 24 Jul 2026, 12:40 PM AEST</div>
   </div>
 </div>
 
@@ -888,6 +888,39 @@ function adoptTrip(dest) {
   plotTripRoute(dest);
 }
 let pendingTripSwitch = null;   // a proposed destination change, awaiting yes/no
+
+// Cloud transcription punctuates ("Cardwell." / "Cardwell?"), the phone's own
+// recogniser usually doesn't. Strip the trailing stop before anything compares
+// or geocodes a place name, or "Cardwell." never matches "Cardwell".
+function cleanTranscript(text) {
+  return (text || '').trim().replace(/\s+/g, ' ').replace(/[.,!?;:]+$/, '').trim();
+}
+
+// PURE: did OUR last reply ask the driver where they're headed? Detecting our
+// own QUESTION is fine — what we never do is scrape our own text for a place.
+function asksForDestination(reply) {
+  const t = (reply || '').toLowerCase();
+  if (!/\?|need|tell me|give me/.test(t)) return false;
+  return /\b(where (are you|are we|you)\b[^?]*\b(head|heading|go|going|off to|bound)|where to\b|where are we headed|need (your|a|the) destination|what'?s the destination|where'?s the destination|which town|where am i taking you|where do you want to go|destination\?)/.test(t);
+}
+
+// PURE: is this reply a bare place name — the natural answer to that question?
+// Deliberately permissive on case (voice transcripts vary) but tight on shape:
+// 1-3 short words, letters/hyphens/apostrophes only, no verbs or question words.
+function looksLikeBarePlace(text) {
+  const t = cleanTranscript(text);
+  if (!t || t.length < 3 || t.length > 40) return false;
+  const words = t.split(' ');
+  if (words.length > 3) return false;
+  if (!words.every(w => /^[A-Za-z][A-Za-z'’\-]*$/.test(w))) return false;
+  // A place name contains none of these. Anything carrying one is an answer of
+  // some other kind ("I don't know", "cheapest fuel") — let the normal flow have
+  // it. Words that DO appear in real town names (Bay, Beach, Springs, Port,
+  // Mount, Harbour, Hill, Creek) are deliberately absent from this list.
+  const STOP = /^(i|we|you|he|she|it|they|me|us|my|our|your|and|or|but|a|an|of|for|with|about|to|from|at|in|on|is|am|are|was|were|be|been|being|do|does|did|don'?t|doesn'?t|didn'?t|isn'?t|aren'?t|can'?t|won'?t|not|no|yes|yeah|yep|nah|nope|ok|okay|sure|maybe|dunno|know|knows|think|want|wanna|need|get|got|go|going|goes|went|come|coming|take|give|tell|find|show|look|let|can|could|would|should|will|shall|may|might|must|have|has|had|what|where|when|why|how|who|which|help|stop|cancel|please|thanks|thank|sorry|hello|hi|hey|um|uh|er|home|here|there|back|again|repeat|next|more|less|far|long|much|many|time|today|tomorrow|tonight|now|soon|later|anywhere|somewhere|everywhere|nowhere|something|anything|nothing|everything|cheapest|cheap|nearest|closest|near|close|fuel|petrol|diesel|servo|gas|unleaded|coffee|food|eat|drink|camp|camps|campsite|campsites|caravan|weather|toilet|toilets|map|maps|sos)$/i;
+  if (words.some(w => STOP.test(w))) return false;
+  return true;
+}
 
 // PURE: honest one-glance day brief from real route data (km + OSRM hours),
 // paced for the vehicle (same factors the AI uses: car +10%, caravan/campervan
@@ -2632,7 +2665,9 @@ function startRecogniser() {
 // transcript — arrives HERE and nowhere else, so nothing downstream knows or
 // cares which engine heard it. Do not add a second route into sendMessage.
 function deliverTranscript(text) {
-  text = (text || '').trim();
+  // Cloud transcription punctuates; the phone's recogniser doesn't. Normalise
+  // once HERE so "Cardwell." and "Cardwell" are the same word everywhere after.
+  text = cleanTranscript(text);
   if (text.length <= 1 || busy) return;
   convoSilentTurns = 0;                // they spoke — still in the conversation
   showCaptured(text);
@@ -3445,6 +3480,13 @@ function matchPendingAnswer(text, pending) {
   if (!pending) return null;
   const t = (text || '').trim().toLowerCase();
   if (!t) return null;
+  if (pending.type === 'destination') {
+    // We asked where they're headed — a bare place name IS the answer. Accept
+    // it (punctuation stripped); the caller geocodes before setting the trip.
+    const place = cleanTranscript(text);
+    if (looksLikeBarePlace(place)) return { action: 'destination', place };
+    return null;   // a real sentence — let the normal flow handle it
+  }
   if (pending.type === 'trip-mode') {
     // "Out for the day, or on a journey?" — day = back tonight; journey = travelling on.
     if (/\b(day out|out for the day|day trip|just (?:the|a) day|back (?:home )?tonight|home tonight|returning tonight)\b/.test(t) || /^(day|the day|out)$/.test(t))
@@ -4118,6 +4160,23 @@ async function sendMessage(silent){
       addMsg('user', text);
       if (pa.action === 'search') {
         searchNumberFor(pa.site);
+      } else if (pa.action === 'destination') {
+        // Geocode the bare name before committing to it. NEVER re-ask blind:
+        // if it can't be found, say what was actually heard (SPEC §0).
+        busy = true; document.getElementById('sendBtn').disabled = true; showTyping();
+        let found = null;
+        try { found = await geocodePlace(pa.place); } catch(e) {}
+        hideTyping(); busy = false; document.getElementById('sendBtn').disabled = false;
+        let msg;
+        if (found) {
+          adoptTrip(pa.place);
+          msg = `Trip set to ${pa.place}. Out for the day, or on a journey?`;
+          pendingQuestion = { type: 'trip-mode', dest: pa.place };
+        } else {
+          msg = `I heard ${pa.place} but can't find it on the map. Say it again, or give me the nearest town?`;
+          pendingQuestion = { type: 'destination' };   // still waiting — but they know why
+        }
+        addMsg('nav', msg); lastNavReply = msg; lastSpoken = msg; speak(msg);
       } else if (pa.action === 'trip-mode') {
         // Store the mode ON the trip, then give the road brief. Day out = brief
         // only, no overnight/camp prompts. Journey = brief, then ONE held offer.
@@ -4403,6 +4462,9 @@ async function sendMessage(silent){
         messages.push({role:'assistant',content:reply});
         addMsg('nav',reply);
         speak(reply);
+        // If we just asked where they're headed, hold that question so the
+        // natural one-word answer ("Cardwell") is accepted instead of looping.
+        if (!currentRunDest && asksForDestination(reply)) pendingQuestion = { type: 'destination' };
         // Pin the options we offered onto the map — pictorial reference at a glance
         if (window._pendingPins && window._pendingPins.length) {
           showOptionPins(window._pendingPins);
