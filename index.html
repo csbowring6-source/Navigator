@@ -564,7 +564,7 @@
   </div>
   <div class="home-foot">
     <button class="home-edit" onclick="openSetup(true)">⚙ Edit setup</button>
-    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 24 Jul 2026, 12:40 PM AEST</div>
+    <div class="build-stamp" id="buildStamp" title="Last updated">✓ v 24 Jul 2026, 01:25 PM AEST</div>
   </div>
 </div>
 
@@ -2387,8 +2387,31 @@ let recChunks = [];
 let recMaxTimer = null;
 let recAudioCtx = null;
 let cloudSendWanted = true;     // did the driver want this turn sent?
+let recStartedAt = 0;           // when this recording began
+let recVoiced = false;          // did the analyser ever hear actual speech?
+let recAnalyserOn = false;      // ...and was the analyser running to judge that?
 const REC_SILENCE_MS = 1500;    // ~1.5s of quiet ends the turn
 const REC_MAX_MS = 30000;       // hard stop — never record forever
+const REC_MIN_MS = 700;         // shorter than this is a fumbled tap, not speech
+const REC_SHORT_MS = 1500;      // "short enough that a stock phrase is suspect"
+
+// Whisper HALLUCINATES on silence — it emits training-data boilerplate ("call
+// ended", "thank you", "Subtitles by …") with full confidence. Those phrases
+// must never reach the chat as if the driver said them. Only ever consulted
+// when the audio was short or silent, so a real "thank you" still gets through.
+const SILENCE_ARTEFACTS = [
+  'call ended', 'thank you', 'thanks', 'thank you very much', 'thanks for watching',
+  'thank you for watching', 'thanks for listening', 'please subscribe', 'subscribe',
+  'like and subscribe', 'the end', 'you', 'music', 'applause', 'silence', 'bleep',
+];
+function isSilenceArtefact(text) {
+  const t = cleanTranscript(text).toLowerCase().replace(/[^a-z0-9' ]/g, '').replace(/\s+/g,' ').trim();
+  if (!t) return true;
+  if (SILENCE_ARTEFACTS.includes(t)) return true;
+  if (/^(subtitles?|captions?|transcriptions?|translations?)\b.*\b(by|provided|from)\b/.test(t)) return true;
+  if (/amara\.?org|subscribe to|www\.|\.com$/.test(t)) return true;
+  return false;
+}
 
 function cloudEarsSupported() {
   return !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
@@ -2424,6 +2447,7 @@ function armRecordingSilence() {
     an.fftSize = 512;
     src.connect(an);
     const buf = new Uint8Array(an.fftSize);
+    recAnalyserOn = true;   // we CAN judge silence this turn
     let spoke = false, quietSince = 0;
     const tick = () => {
       if (!cloudActive) return;
@@ -2431,7 +2455,7 @@ function armRecordingSilence() {
       let peak = 0;
       for (let i = 0; i < buf.length; i++) { const v = Math.abs(buf[i] - 128); if (v > peak) peak = v; }
       const now = Date.now();
-      if (peak > 6) { spoke = true; heardSpeech = true; quietSince = 0; }
+      if (peak > 6) { spoke = true; recVoiced = true; heardSpeech = true; quietSince = 0; }
       else if (spoke) {
         if (!quietSince) quietSince = now;
         else if (now - quietSince >= REC_SILENCE_MS) { stopCloudCapture(true); return; }
@@ -2462,6 +2486,7 @@ async function startCloudCapture() {
   recChunks = [];
   cloudSendWanted = true;
   heardSpeech = false;
+  recVoiced = false; recAnalyserOn = false; recStartedAt = Date.now();
   mediaRecorder.ondataavailable = ev => { if (ev.data && ev.data.size) recChunks.push(ev.data); };
   mediaRecorder.onstop = () => { finishCloudCapture(); };
   try {
@@ -2514,6 +2539,14 @@ async function transcribeBlob(blob) {
   return (d && d.text) ? String(d.text).trim() : '';
 }
 
+// A discard is a dead end, not a fallback: say so and stop. Re-opening the mic
+// (or handing to Web Speech) here would just re-record the same silence.
+function nothingCaught() {
+  showCaptured('');
+  setVoiceStatus('', '🎙 I didn\'t catch anything — try again');
+  setTimeout(() => setVoiceStatus('',''), 3000);
+}
+
 async function finishCloudCapture() {
   const chunks = recChunks; recChunks = [];
   const type = (mediaRecorder && mediaRecorder.mimeType) || pickRecordingMime() || 'audio/webm';
@@ -2522,14 +2555,27 @@ async function finishCloudCapture() {
   setListeningUI(false);
   if (!cloudSendWanted) { setVoiceStatus('',''); showCaptured(''); return; }
   const blob = new Blob(chunks, { type });
-  if (blob.size < 1024) {
-    setVoiceStatus('', '🎙 Didn\'t catch that — tap and try again');
-    setTimeout(() => setVoiceStatus('',''), 3000);
+  const durationMs = recStartedAt ? (Date.now() - recStartedAt) : 0;
+  const nearSilent = recAnalyserOn && !recVoiced;   // analyser ran and heard nothing
+  // Nothing worth transcribing: too short, too small, or provably silent. Don't
+  // even POST it — audio like this is exactly what Whisper hallucinates over.
+  if (blob.size < 1024 || durationMs < REC_MIN_MS || nearSilent) {
+    console.warn('[cloud ears] discarded before sending —',
+      `${durationMs}ms, ${blob.size}b, voiced=${recAnalyserOn ? recVoiced : 'unknown'}`);
+    nothingCaught();
     return;
   }
   setVoiceStatus('speaking', '💭 Thinking…');
   try {
     const text = await transcribeBlob(blob);
+    // Whisper answers silence with boilerplate. If the audio was short or we
+    // never heard a voice, a stock phrase is a phantom — bin it, don't send it.
+    if (text && isSilenceArtefact(text) && (nearSilent || durationMs < REC_SHORT_MS)) {
+      console.warn('[cloud ears] discarded silence hallucination:', JSON.stringify(text),
+        `(${durationMs}ms, voiced=${recAnalyserOn ? recVoiced : 'unknown'})`);
+      nothingCaught();
+      return;
+    }
     if (text) { setVoiceStatus('',''); deliverTranscript(text); return; }
     console.warn('[cloud ears] empty transcript — Web Speech for this turn');
   } catch (e) {
